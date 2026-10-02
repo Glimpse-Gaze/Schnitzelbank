@@ -21,6 +21,136 @@ body {
 }
 
 #app {
+  position: relative;
   width: 100%;
   height: 100%;
+}
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 20px 20px 22px;
+}
+
+.lyrics {
+  width: min(720px, calc(100% - 24px));
+  padding: 14px 22px 12px;
+  border-radius: 16px;
+  background: rgba(247, 241, 230, 0.94);
+  color: #1a1a1a;
+  text-align: center;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+.lyrics__kicker {
+  margin: 0 0 6px;
+  font: italic 600 13px/1 Georgia, "Palatino Linotype", serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.lyrics__block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lyrics__line {
+  margin: 0;
+  font: 600 28px/1.25 Georgia, "Palatino Linotype", serif;
+}
+
+.lyrics__idle,
+.lyrics__error {
+  margin: 4px 0 2px;
+  font: 500 20px/1.35 Georgia, "Palatino Linotype", serif;
+}
+
+.lyrics__error {
+  color: #8d2a16;
+}
+
+.lyrics__meter {
+  height: 4px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.lyrics__meter span {
+  display: block;
+  height: 100%;
+  background: #1a1a1a;
+}
+
+.transport-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.zoom-controls,
+.transport {
+  display: flex;
+  background: #f7f1e6;
+  border: 3px solid #111;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.zoom-controls button,
+.transport button {
+  width: 74px;
+  height: 74px;
+  padding: 16px;
+  border: 0;
+  border-right: 3px solid #111;
+  background: transparent;
+  color: #111;
+  cursor: pointer;
+}
+
+.zoom-controls button:last-child,
+.transport button:last-child {
+  border-right: 0;
+}
+
+.zoom-controls button:hover,
+.transport button:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.transport button.is-active {
+  background: #111;
+  color: #f7f1e6;
+}
+
+.zoom-controls svg,
+.transport svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.transport svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+.zoom-controls svg {
+  fill: none;
+  stroke-width: 5;
 }

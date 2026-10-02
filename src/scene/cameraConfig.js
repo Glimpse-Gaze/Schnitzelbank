@@ -1,12 +1,13 @@
-// Test board faces +X. Y is up, Z runs across the poster.
-// Bounds of Schnitzelbank_test.glb are about x -0.09..0.03, y 0..2, z -0.5..0.5.
-// Orbit is intentionally absent: this camera only frames the front.
+// The board faces +X. Y is up, Z runs across the poster.
+// Distance changes for zoom. The view direction stays on the front.
 export const cameraConfig = {
   position: [3.7, 1, 0],
   target: [0, 1, 0],
   fov: 34,
   near: 0.01,
   far: 40,
+  minDistance: 1.35,
+  maxDistance: 6.2,
 };
 
 export function applyCamera(camera) {

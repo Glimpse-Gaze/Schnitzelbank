@@ -1,13 +1,12 @@
-import { useState } from "react";
+import { memo } from "react";
 import { Canvas } from "@react-three/fiber";
 import HoverOutline from "../components/HoverOutline.jsx";
 import Board from "./Board.jsx";
 import BoardCamera from "./BoardCamera.jsx";
+import ZoomRig from "./ZoomRig.jsx";
 import { applyCamera, cameraConfig } from "./cameraConfig.js";
 
-export default function Scene() {
-  const [hoveredPanel, setHoveredPanel] = useState(null);
-
+function Scene({ hoveredPanel, cuedPanel, clickedPanel, onHoverPanel, onClickPanel }) {
   return (
     <Canvas
       flat
@@ -22,11 +21,20 @@ export default function Scene() {
     >
       <color attach="background" args={["#2a2a2a"]} />
       <BoardCamera />
+      <ZoomRig />
       <ambientLight intensity={0.95} />
       <directionalLight position={[4.5, 3.2, 1.4]} intensity={1.7} />
       <HoverOutline>
-        <Board hoveredPanel={hoveredPanel} onHoverPanel={setHoveredPanel} />
+        <Board
+          hoveredPanel={hoveredPanel}
+          cuedPanel={cuedPanel}
+          clickedPanel={clickedPanel}
+          onHoverPanel={onHoverPanel}
+          onClickPanel={onClickPanel}
+        />
       </HoverOutline>
     </Canvas>
   );
 }
+
+export default memo(Scene);
