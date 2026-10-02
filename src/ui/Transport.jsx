@@ -26,9 +26,9 @@ export default function Transport({ status, onPlay, onPause, onStop }) {
       <div className="transport" role="group" aria-label="Song">
         <button
           type="button"
-          className={status === "playing" ? "is-active" : undefined}
+          className={status === "playing" || status === "counting" ? "is-active" : undefined}
           aria-label="Play"
-          aria-pressed={status === "playing"}
+          aria-pressed={status === "playing" || status === "counting"}
           onClick={onPlay}
         >
           <Glyph>

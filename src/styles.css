@@ -26,6 +26,22 @@ body {
   height: 100%;
 }
 
+.countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.countdown span {
+  font: 700 168px/1 Georgia, "Palatino Linotype", serif;
+  color: #f7f1e6;
+  text-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+}
+
 .hud {
   position: absolute;
   inset: 0;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Howl } from "howler";
 import { sequenceDuration } from "../data/sequence.js";
 
-const SONG_URL = "/audio/Schnitzelbank2.m4a";
+const SONG_URL = "/audio/Schnitzelbank2_1.wav";
 
 let sharedHowl = null;
 
@@ -26,6 +26,7 @@ export default function useSong() {
   const howlRef = useRef(null);
   const [status, setStatus] = useState("stopped");
   const [time, setTime] = useState(0);
+  const [countdown, setCountdown] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -59,17 +60,50 @@ export default function useSong() {
     return () => clearInterval(id);
   }, [status]);
 
+  useEffect(() => {
+    if (status !== "counting") return undefined;
+    let value = 3;
+    let cancelled = false;
+    setCountdown(3);
+    const id = window.setInterval(() => {
+      if (cancelled) return;
+      value -= 1;
+      if (value <= 0) {
+        window.clearInterval(id);
+        setCountdown(null);
+        howlRef.current?.play();
+        setStatus("playing");
+        return;
+      }
+      setCountdown(value);
+    }, 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [status]);
+
   const play = () => {
     const howl = howlRef.current;
-    if (!howl || status === "playing") return;
+    if (!howl || status === "playing" || status === "counting") return;
     setError("");
-    howl.play();
-    setStatus("playing");
+    if (status === "paused") {
+      howl.play();
+      setStatus("playing");
+      return;
+    }
+    setCountdown(3);
+    setStatus("counting");
   };
 
   const pause = () => {
     const howl = howlRef.current;
-    if (!howl || status !== "playing") return;
+    if (!howl || status === "counting") {
+      setCountdown(null);
+      setStatus("stopped");
+      return;
+    }
+    if (status !== "playing") return;
     howl.pause();
     setTime(readTime(howl));
     setStatus("paused");
@@ -79,9 +113,10 @@ export default function useSong() {
     const howl = howlRef.current;
     if (!howl) return;
     howl.stop();
+    setCountdown(null);
     setTime(0);
     setStatus("stopped");
   };
 
-  return { status, time, error, play, pause, stop };
+  return { status, time, countdown, error, play, pause, stop };
 }

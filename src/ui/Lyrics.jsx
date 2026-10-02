@@ -1,7 +1,7 @@
 import { stepAt } from "../data/sequence.js";
 
 export default function Lyrics({ status, time, error }) {
-  const step = status === "stopped" ? null : stepAt(time);
+  const step = status === "playing" || status === "paused" ? stepAt(time) : null;
 
   return (
     <section className="lyrics" aria-live="polite">
@@ -21,7 +21,9 @@ export default function Lyrics({ status, time, error }) {
           </div>
         </>
       ) : (
-        <p className="lyrics__idle">Play the song, then follow the pointing hand.</p>
+        <p className="lyrics__idle">
+          {status === "counting" ? "Get ready." : "Play the song, then follow the pointing hand."}
+        </p>
       )}
     </section>
   );

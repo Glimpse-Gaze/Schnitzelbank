@@ -6,11 +6,11 @@ import useSong from "./audio/useSong.js";
 import { stepAt } from "./data/sequence.js";
 
 export default function App() {
-  const { status, time, error, play, pause, stop } = useSong();
+  const { status, time, countdown, error, play, pause, stop } = useSong();
   const [hoveredPanel, setHoveredPanel] = useState(null);
   const [clickedPanel, setClickedPanel] = useState(null);
   const clickTimer = useRef(0);
-  const step = status === "stopped" ? null : stepAt(time);
+  const step = status === "playing" || status === "paused" ? stepAt(time) : null;
 
   const onClickPanel = useCallback((name) => {
     setClickedPanel(name);
@@ -41,6 +41,11 @@ export default function App() {
         onHoverPanel={setHoveredPanel}
         onClickPanel={onClickPanel}
       />
+      {countdown ? (
+        <div className="countdown" aria-live="assertive">
+          <span>{countdown}</span>
+        </div>
+      ) : null}
       <div className="hud">
         <Lyrics status={status} time={time} error={error} />
         <Transport status={status} onPlay={play} onPause={pause} onStop={stop} />
