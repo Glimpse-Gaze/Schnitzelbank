@@ -1,5 +1,5 @@
 // The board faces +X. Y is up, Z runs across the poster.
-// Distance changes for zoom. The view direction stays on the front.
+// Zoom changes distance along X. Pan slides the view in Y and Z only.
 export const cameraConfig = {
   position: [3.7, 1, 0],
   target: [0, 1, 0],
@@ -8,6 +8,7 @@ export const cameraConfig = {
   far: 40,
   minDistance: 1.35,
   maxDistance: 6.2,
+  panLimit: { y: 1.25, z: 0.85 },
 };
 
 export function applyCamera(camera) {

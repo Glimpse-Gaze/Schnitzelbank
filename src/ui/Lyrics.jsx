@@ -1,11 +1,16 @@
-import { stepAt } from "../data/sequence.js";
+import { stepAt, steps } from "../data/sequence.js";
 
 export default function Lyrics({ status, time, error }) {
-  const step = status === "playing" || status === "paused" ? stepAt(time) : null;
+  const active = status === "playing" || status === "paused";
+  const step = active ? stepAt(time) : null;
+  const phraseLabel = step ? `${step.index + 1} / ${steps.length}` : `${steps.length} phrases`;
 
   return (
     <section className="lyrics" aria-live="polite">
-      <p className="lyrics__kicker">Schnitzelbank</p>
+      <div className="lyrics__heading">
+        <p className="lyrics__kicker">Schnitzelbank</p>
+        <p className="lyrics__count">{phraseLabel}</p>
+      </div>
       {error ? <p className="lyrics__error">{error}</p> : null}
       {step ? (
         <>

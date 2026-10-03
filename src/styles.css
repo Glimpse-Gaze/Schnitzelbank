@@ -21,9 +21,30 @@ body {
 }
 
 #app {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.stage > div {
+  width: 100%;
+  height: 100%;
+}
+
+.stage canvas {
+  touch-action: none;
+  cursor: grab;
+}
+
+.stage canvas.is-panning {
+  cursor: grabbing !important;
 }
 
 .countdown {
@@ -42,16 +63,15 @@ body {
   text-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
 }
 
-.hud {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+.player {
+  flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  gap: 14px;
-  padding: 20px 20px 22px;
+  gap: 12px;
+  padding: 14px 20px 16px;
+  background: #1c1c1c;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .lyrics {
@@ -64,11 +84,25 @@ body {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
-.lyrics__kicker {
-  margin: 0 0 6px;
+.lyrics__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.lyrics__kicker,
+.lyrics__count {
+  margin: 0;
   font: italic 600 13px/1 Georgia, "Palatino Linotype", serif;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.lyrics__count {
+  letter-spacing: 0.06em;
+  font-style: normal;
 }
 
 .lyrics__block {

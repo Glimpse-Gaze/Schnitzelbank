@@ -10,6 +10,7 @@ import { useGraph, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { HoverSelect } from "../components/HoverOutline.jsx";
 import { isPanelName } from "../data/panels.js";
+import { pointerDragged } from "./pointerDrag.js";
 import PointingHand from "./PointingHand.jsx";
 
 const PANEL_OFFSET = 0.008;
@@ -42,8 +43,9 @@ function PanelHit({ node, hovered, cued, clicked, onHoverPanel, onClickPanel }) 
             event.stopPropagation();
             onHoverPanel((current) => (current === node.name ? null : current));
           }}
-          onPointerDown={(event) => {
+          onPointerUp={(event) => {
             event.stopPropagation();
+            if (pointerDragged()) return;
             onClickPanel(node.name);
           }}
         >
@@ -96,7 +98,7 @@ export function Model({
   useEffect(() => {
     const canvas = gl.domElement;
     const previous = canvas.style.cursor;
-    canvas.style.cursor = hoveredPanel ? "pointer" : "default";
+    canvas.style.cursor = hoveredPanel ? "pointer" : "";
     return () => {
       canvas.style.cursor = previous;
     };

@@ -1,66 +1,70 @@
-// Schnitzelbank.mid is 2/4 at 120 BPM, so one bar lasts one second.
-// The sung file is longer than this first loop; playback stops when the loop ends.
-export const SECONDS_PER_BAR = 1;
-
+// Cue times are seconds in Schnitzelbank3.wav. Playback stops at the last cue.
 export const steps = [
   {
     panel: "Row0_Panel0",
-    bars: 8,
+    start: 0,
+    end: 8.3,
+    lines: ["Oh, du schöne,", "oh, du schöne,", "oh, du schöne, Schnitzelbank"],
+  },
+  {
+    panel: "Row0_Panel0",
+    start: 8.3,
+    end: 12.45,
     lines: ["Ist das nicht ein Schnitzelbank?", "Ja das ist ein Schnitzelbank."],
   },
   {
     panel: "Row1_Panel1",
-    bars: 8,
+    start: 12.45,
+    end: 17,
     lines: ["Ist das nicht ein kurz und lang?", "Ja das ist ein kurz und lang."],
   },
   {
     panel: "Row1_Panel2",
-    bars: 8,
+    start: 17,
+    end: 21.1,
     lines: ["Ist das nicht ein hin und her?", "Ja das ist ein hin und her."],
   },
   {
     panel: "Row1_Panel2",
-    bars: 2,
+    start: 21.1,
+    end: 22.1,
     lines: ["Hin und her,"],
   },
   {
     panel: "Row1_Panel1",
-    bars: 2,
+    start: 22.1,
+    end: 23.1,
     lines: ["kurz und lang,"],
   },
   {
     panel: "Row0_Panel0",
-    bars: 2,
+    start: 23.1,
+    end: 24.2,
     lines: ["Schnitzelbank,"],
   },
   {
     panel: "Row0_Panel0",
-    bars: 12,
-    lines: ["Oh du schöne,", "Oh du schöne,", "Oh du schöne Schnitzelbank."],
+    start: 24.2,
+    end: 32.4,
+    lines: ["Oh, du schöne,", "oh, du schöne,", "oh, du schöne, Schnitzelbank"],
   },
 ];
 
-export const sequenceDuration = steps.reduce(
-  (sum, step) => sum + step.bars * SECONDS_PER_BAR,
-  0,
-);
+export const sequenceDuration = steps[steps.length - 1].end;
 
 export function stepAt(time) {
   if (time < 0 || time >= sequenceDuration) return null;
-  let cursor = 0;
   for (let index = 0; index < steps.length; index += 1) {
     const step = steps[index];
-    const duration = step.bars * SECONDS_PER_BAR;
-    if (time < cursor + duration) {
+    if (time < step.end) {
+      const duration = step.end - step.start;
       return {
         ...step,
         index,
-        start: cursor,
         duration,
-        progress: (time - cursor) / duration,
+        progress: (time - step.start) / duration,
       };
     }
-    cursor += duration;
   }
   return null;
 }

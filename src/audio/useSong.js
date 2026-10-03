@@ -2,18 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { Howl } from "howler";
 import { sequenceDuration } from "../data/sequence.js";
 
-const SONG_URL = "/audio/Schnitzelbank2_1.wav";
+const SONG_URL = "/audio/Schnitzelbank3.wav";
 
 let sharedHowl = null;
+let sharedUrl = "";
 
 function getHowl() {
-  if (!sharedHowl) {
-    sharedHowl = new Howl({
-      src: [SONG_URL],
-      html5: true,
-      preload: true,
-    });
-  }
+  if (sharedHowl && sharedUrl === SONG_URL) return sharedHowl;
+  sharedHowl?.unload();
+  sharedUrl = SONG_URL;
+  sharedHowl = new Howl({
+    src: [SONG_URL],
+    html5: true,
+    preload: true,
+  });
   return sharedHowl;
 }
 
@@ -38,8 +40,9 @@ export default function useSong() {
     return () => {
       howl.off("loaderror", onError);
       howl.off("playerror", onError);
+      howl.stop();
     };
-  }, []);
+  }, [SONG_URL]);
 
   useEffect(() => {
     if (status !== "playing") return undefined;

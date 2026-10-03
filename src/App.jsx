@@ -34,22 +34,24 @@ export default function App() {
 
   return (
     <div id="app">
-      <Scene
-        hoveredPanel={hoveredPanel}
-        cuedPanel={step?.panel ?? null}
-        clickedPanel={clickedPanel}
-        onHoverPanel={setHoveredPanel}
-        onClickPanel={onClickPanel}
-      />
-      {countdown ? (
-        <div className="countdown" aria-live="assertive">
-          <span>{countdown}</span>
-        </div>
-      ) : null}
-      <div className="hud">
+      <div className="stage">
+        <Scene
+          hoveredPanel={hoveredPanel}
+          cuedPanel={step?.panel ?? null}
+          clickedPanel={clickedPanel}
+          onHoverPanel={setHoveredPanel}
+          onClickPanel={onClickPanel}
+        />
+        {countdown ? (
+          <div className="countdown" aria-live="assertive">
+            <span>{countdown}</span>
+          </div>
+        ) : null}
+      </div>
+      <section className="player" aria-label="Player">
         <Lyrics status={status} time={time} error={error} />
         <Transport status={status} onPlay={play} onPause={pause} onStop={stop} />
-      </div>
+      </section>
     </div>
   );
 }
