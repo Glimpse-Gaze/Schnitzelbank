@@ -6,17 +6,28 @@ import BoardCamera from "./BoardCamera.jsx";
 import ZoomRig from "./ZoomRig.jsx";
 import { applyCamera, cameraConfig } from "./cameraConfig.js";
 
-function Scene({ hoveredPanel, cuedPanel, clickedPanel, onHoverPanel, onClickPanel }) {
+const cameraProps = {
+  position: cameraConfig.position,
+  fov: cameraConfig.fov,
+  near: cameraConfig.near,
+  far: cameraConfig.far,
+};
+
+function Scene({
+  hoveredPanel,
+  cuedPanel,
+  clickedPanel,
+  showPointer,
+  grade,
+  gradeRef,
+  onHoverPanel,
+  onClickPanel,
+}) {
   return (
     <Canvas
       flat
       dpr={[1, 2]}
-      camera={{
-        position: cameraConfig.position,
-        fov: cameraConfig.fov,
-        near: cameraConfig.near,
-        far: cameraConfig.far,
-      }}
+      camera={cameraProps}
       onCreated={({ camera }) => applyCamera(camera)}
     >
       <color attach="background" args={["#2a2a2a"]} />
@@ -29,6 +40,9 @@ function Scene({ hoveredPanel, cuedPanel, clickedPanel, onHoverPanel, onClickPan
           hoveredPanel={hoveredPanel}
           cuedPanel={cuedPanel}
           clickedPanel={clickedPanel}
+          showPointer={showPointer}
+          grade={grade}
+          gradeRef={gradeRef}
           onHoverPanel={onHoverPanel}
           onClickPanel={onClickPanel}
         />

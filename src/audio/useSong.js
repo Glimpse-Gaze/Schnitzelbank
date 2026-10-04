@@ -6,6 +6,7 @@ const SONG_URL = "/audio/Schnitzelbank3.wav";
 
 let sharedHowl = null;
 let sharedUrl = "";
+let sharedVolume = 1;
 
 function getHowl() {
   if (sharedHowl && sharedUrl === SONG_URL) return sharedHowl;
@@ -15,6 +16,7 @@ function getHowl() {
     src: [SONG_URL],
     html5: true,
     preload: true,
+    volume: sharedVolume,
   });
   return sharedHowl;
 }
@@ -24,12 +26,18 @@ function readTime(howl) {
   return typeof value === "number" ? value : 0;
 }
 
+export function songTime() {
+  if (!sharedHowl) return 0;
+  return readTime(sharedHowl);
+}
+
 export default function useSong() {
   const howlRef = useRef(null);
   const [status, setStatus] = useState("stopped");
   const [time, setTime] = useState(0);
   const [countdown, setCountdown] = useState(null);
   const [error, setError] = useState("");
+  const [volume, setVolumeState] = useState(sharedVolume);
 
   useEffect(() => {
     const howl = getHowl();
@@ -112,6 +120,13 @@ export default function useSong() {
     setStatus("paused");
   };
 
+  const setVolume = (value) => {
+    const next = Math.min(1, Math.max(0, Number(value)));
+    sharedVolume = next;
+    setVolumeState(next);
+    howlRef.current?.volume(next);
+  };
+
   const stop = () => {
     const howl = howlRef.current;
     if (!howl) return;
@@ -121,5 +136,5 @@ export default function useSong() {
     setStatus("stopped");
   };
 
-  return { status, time, countdown, error, play, pause, stop };
+  return { status, time, countdown, error, volume, setVolume, play, pause, stop };
 }

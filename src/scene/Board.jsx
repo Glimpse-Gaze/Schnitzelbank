@@ -4,13 +4,16 @@ Row*_Panel* meshes stay invisible and take the pointer.
 Their Blender translation and scale are kept, so each row sits on its own band.
 */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useGraph, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { HoverSelect } from "../components/HoverOutline.jsx";
 import { isPanelName } from "../data/panels.js";
 import { pointerDragged } from "./pointerDrag.js";
+import { registerHit } from "./panelHits.js";
+import CueFrame from "./CueFrame.jsx";
+import GradeFloat from "./GradeFloat.jsx";
 import PointingHand from "./PointingHand.jsx";
 
 const PANEL_OFFSET = 0.008;
@@ -23,9 +26,14 @@ function nodeProps(node, xOffset = 0) {
   };
 }
 
-function PanelHit({ node, hovered, cued, clicked, onHoverPanel, onClickPanel }) {
+function PanelHit({ node, hovered, cued, clicked, showPointer, onHoverPanel, onClickPanel }) {
   const hit = useRef(null);
   const transform = nodeProps(node, PANEL_OFFSET);
+
+  useLayoutEffect(() => {
+    registerHit(node.name, hit.current);
+    return () => registerHit(node.name, null);
+  }, [node.name]);
 
   return (
     <group>
@@ -70,7 +78,7 @@ function PanelHit({ node, hovered, cued, clicked, onHoverPanel, onClickPanel }) 
           />
         </mesh>
       ) : null}
-      {cued ? <PointingHand target={hit} /> : null}
+      {cued && showPointer ? <PointingHand target={hit} /> : null}
     </group>
   );
 }
@@ -79,6 +87,9 @@ export function Model({
   hoveredPanel = null,
   cuedPanel = null,
   clickedPanel = null,
+  showPointer = false,
+  grade = null,
+  gradeRef = null,
   onHoverPanel = () => {},
   onClickPanel = () => {},
   ...props
@@ -123,10 +134,13 @@ export function Model({
           hovered={hoveredPanel === node.name}
           cued={cuedPanel === node.name}
           clicked={clickedPanel === node.name}
+          showPointer={showPointer}
           onHoverPanel={onHoverPanel}
           onClickPanel={onClickPanel}
         />
       ))}
+      <CueFrame />
+      <GradeFloat grade={grade} labelRef={gradeRef} />
     </group>
   );
 }

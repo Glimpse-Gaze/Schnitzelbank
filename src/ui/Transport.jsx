@@ -8,7 +8,7 @@ function Glyph({ children }) {
   );
 }
 
-export default function Transport({ status, onPlay, onPause, onStop }) {
+export default function Transport({ status, volume, onVolume, onPlay, onPause, onStop }) {
   return (
     <div className="transport-bar">
       <div className="zoom-controls" role="group" aria-label="Zoom">
@@ -52,6 +52,18 @@ export default function Transport({ status, onPlay, onPause, onStop }) {
           </Glyph>
         </button>
       </div>
+      <label className="volume">
+        <span>Volume</span>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={volume}
+          aria-label="Volume"
+          onChange={(event) => onVolume(event.target.value)}
+        />
+      </label>
     </div>
   );
 }

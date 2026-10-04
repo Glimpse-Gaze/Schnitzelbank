@@ -7,52 +7,36 @@ import { bindZoom } from "./zoomBus.js";
 
 const target = new THREE.Vector3(...cameraConfig.target);
 const homeTarget = target.clone();
-const offset = new THREE.Vector3();
-const right = new THREE.Vector3();
-const up = new THREE.Vector3();
-const shift = new THREE.Vector3();
-const previousTarget = new THREE.Vector3();
 
 const DRAG_THRESHOLD = 5;
 
 function setDistance(camera, distance) {
-  offset.copy(camera.position).sub(target);
-  const length = offset.length();
-  if (length < 1e-4) return;
   const next = THREE.MathUtils.clamp(distance, cameraConfig.minDistance, cameraConfig.maxDistance);
-  offset.multiplyScalar(next / length);
-  camera.position.copy(target).add(offset);
+  camera.position.set(target.x + next, target.y, target.z);
   camera.up.set(0, 1, 0);
   camera.lookAt(target);
   camera.updateProjectionMatrix();
 }
 
 function panByPixels(camera, element, dx, dy) {
-  camera.updateMatrixWorld();
-  right.setFromMatrixColumn(camera.matrixWorld, 0);
-  up.setFromMatrixColumn(camera.matrixWorld, 1);
-  const distance = camera.position.distanceTo(target);
+  const distance = Math.max(camera.position.x - target.x, cameraConfig.minDistance);
   const visibleHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5) * distance;
   const scale = visibleHeight / element.clientHeight;
 
-  // Dragging grabs the board: the camera steps the opposite way, and only sideways or up.
-  shift.copy(right).multiplyScalar(-dx * scale).addScaledVector(up, dy * scale);
-  shift.x = 0;
-
-  previousTarget.copy(target);
-  target.add(shift);
-  target.x = homeTarget.x;
+  // Screen right is -Z and screen up is +Y. The drag grabs the board.
+  // X stays put, so the camera cannot turn or dolly.
   target.y = THREE.MathUtils.clamp(
-    target.y,
+    target.y + dy * scale,
     homeTarget.y - cameraConfig.panLimit.y,
     homeTarget.y + cameraConfig.panLimit.y,
   );
   target.z = THREE.MathUtils.clamp(
-    target.z,
+    target.z + dx * scale,
     homeTarget.z - cameraConfig.panLimit.z,
     homeTarget.z + cameraConfig.panLimit.z,
   );
-  camera.position.add(shift.copy(target).sub(previousTarget));
+  target.x = homeTarget.x;
+  camera.position.set(target.x + distance, target.y, target.z);
   camera.up.set(0, 1, 0);
   camera.lookAt(target);
 }
