@@ -34,6 +34,7 @@ export default function Board({
   hoveredPanel,
   clickedPanel,
   grade,
+  prost,
   pan,
   zoom,
   onFitZoom,
@@ -147,7 +148,7 @@ export default function Board({
             height={note.height}
             fill="transparent"
             stroke="transparent"
-            onClick={() => onClickPanel(note.id)}
+            onClick={(event) => onClickPanel(note.id, clickPoint(event, note))}
           />
         ))}
         {panels.map((panel) => (
@@ -163,29 +164,79 @@ export default function Board({
             vectorEffect="non-scaling-stroke"
             onPointerEnter={() => onHoverPanel(panel.id)}
             onPointerLeave={() => onHoverPanel(null)}
-            onClick={() => onClickPanel(panel.id)}
+            onClick={(event) => onClickPanel(panel.id, clickPoint(event, panel))}
           />
         ))}
       </svg>
       {gradedPanel ? (
-        <div
-          className="grade-anchor"
-          style={{
-            left: `${((gradedPanel.x + gradedPanel.width / 2 - board.originX) / board.width) * 100}%`,
-            top: `${((gradeTop - board.originY) / board.height) * 100}%`,
-          }}
-        >
-          <span
-            key={`${grade.index}-${grade.value}`}
-            className={
-              grade.value === "early" || grade.value === "late" ? "grade-float is-miss" : "grade-float"
-            }
-            aria-live="polite"
-          >
-            {GRADE_LABEL[grade.value] ?? ""}
-          </span>
-        </div>
+        <GradeToast
+          grade={grade}
+          panel={gradedPanel}
+          board={board}
+          top={gradeTop}
+        />
       ) : null}
+      {prost ? (
+        <GradeToast
+          grade={{ index: prost.id, value: "perfect", point: prost.point }}
+          panel={notes[notes.length - 1]}
+          board={board}
+          top={0}
+          label="Prost!"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function clickPoint(event, panel) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const fx = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
+  const fy = rect.height ? (event.clientY - rect.top) / rect.height : 0.5;
+  const x = panel.x + Math.min(1, Math.max(0, fx)) * panel.width;
+  const y = panel.y + Math.min(1, Math.max(0, fy)) * panel.height;
+  return { x, y, angle: toastAngle(x) };
+}
+
+function toastAngle(x) {
+  const min = x < 420 ? 0 : x > 1180 ? -45 : -60;
+  const max = x < 420 ? 45 : x > 1180 ? 0 : 60;
+  return min + Math.random() * (max - min);
+}
+
+function GradeToast({ grade, panel, board, top, label }) {
+  const late = grade.value === "late";
+  const point = !late && grade.point ? grade.point : null;
+  const x = point ? point.x : panel.x + panel.width / 2;
+  const y = point ? point.y : top;
+  const angle = point ? point.angle : 0;
+  const rad = (angle * Math.PI) / 180;
+  const align = !point ? "-50%" : x < 420 ? "0%" : x > 1180 ? "-100%" : "-50%";
+  const origin = !point ? "center bottom" : x < 420 ? "left bottom" : x > 1180 ? "right bottom" : "center bottom";
+  return (
+    <div
+      className="grade-anchor"
+      style={{
+        left: `${((x - board.originX) / board.width) * 100}%`,
+        top: `${((y - board.originY) / board.height) * 100}%`,
+        "--align": align,
+        "--lift-x": point ? `${Math.sin(rad) * 12}px` : "0px",
+        "--lift-y": point ? `${-Math.cos(rad) * 12}px` : "-14px",
+      }}
+    >
+      <span
+        key={`${grade.index}-${grade.value}`}
+        className={["grade-float", `is-${grade.value}`].join(" ")}
+        style={{
+          "--slide-x": point ? `${Math.sin(rad) * 36}px` : "0px",
+          "--slide-y": point ? `${-Math.cos(rad) * 36}px` : "0px",
+          "--tilt": point ? `${angle * 0.2}deg` : "0deg",
+          "--origin": origin,
+        }}
+        aria-live="polite"
+      >
+        {label ?? GRADE_LABEL[grade.value] ?? ""}
+      </span>
     </div>
   );
 }

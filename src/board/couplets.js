@@ -115,6 +115,8 @@ export const COUPLETS = [
   },
 ];
 
+export const NOTE_COUNT = NOTE_SHAPES.length;
+
 export function shuffleCouplets(couplets = COUPLETS) {
   const next = [...couplets];
   for (let index = next.length - 1; index > 0; index -= 1) {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Board from "./board/Board.jsx";
-import { COUPLETS, shuffleCouplets } from "./board/couplets.js";
+import { COUPLETS, NOTE_COUNT, shuffleCouplets } from "./board/couplets.js";
 import Lyrics from "./ui/Lyrics.jsx";
 import { CanvasTools, Playback } from "./ui/Transport.jsx";
 import useSong, { playResponse, songTime } from "./audio/useSong.js";
@@ -12,6 +12,8 @@ export default function App() {
   const [hoveredPanel, setHoveredPanel] = useState(null);
   const [clickedPanel, setClickedPanel] = useState(null);
   const [grade, setGrade] = useState(null);
+  const [prost, setProst] = useState(null);
+  const noteStep = useRef(0);
   const clickTimer = useRef(0);
   const judged = useRef(new Set());
   const pan = useRef({ x: 0, y: 0 });
@@ -29,10 +31,22 @@ export default function App() {
   const statusRef = useRef(status);
   statusRef.current = status;
 
-  const onClickPanel = useCallback((name) => {
+  const onClickPanel = useCallback((name, point) => {
     setClickedPanel(name);
     window.clearTimeout(clickTimer.current);
     clickTimer.current = window.setTimeout(() => setClickedPanel(null), 420);
+    if (typeof name === "string" && name.startsWith("N")) {
+      const index = Number(name.slice(1)) - 1;
+      if (index === noteStep.current) {
+        noteStep.current += 1;
+        if (noteStep.current === NOTE_COUNT) {
+          noteStep.current = 0;
+          setProst({ id: Date.now(), point });
+        }
+      } else {
+        noteStep.current = 0;
+      }
+    }
     if (statusRef.current !== "playing") return;
     const now = songTime();
     const prompt = promptForPanel(now, name);
@@ -40,7 +54,7 @@ export default function App() {
     judged.current.add(prompt.index);
     const value = gradeAt(now, prompt);
     if (responseOnGrade(value) && !prompt.dexterity) playResponse(prompt);
-    setGrade({ index: prompt.index, value });
+    setGrade({ index: prompt.index, value, point: value === "late" ? null : point });
   }, []);
 
   useEffect(() => {
@@ -73,9 +87,16 @@ export default function App() {
 
   useEffect(() => {
     if (!grade) return undefined;
-    const id = window.setTimeout(() => setGrade(null), 2500);
+    const life = grade.value === "late" ? 1400 : 950;
+    const id = window.setTimeout(() => setGrade(null), life);
     return () => window.clearTimeout(id);
   }, [grade]);
+
+  useEffect(() => {
+    if (!prost) return undefined;
+    const id = window.setTimeout(() => setProst(null), 950);
+    return () => window.clearTimeout(id);
+  }, [prost]);
 
   useEffect(() => {
     if (status === "playing" || status === "paused") return undefined;
@@ -203,6 +224,7 @@ export default function App() {
           hoveredPanel={hoveredPanel}
           clickedPanel={clickedPanel}
           grade={grade}
+          prost={prost}
           pan={panOffset}
           zoom={zoom}
           onFitZoom={onFitZoom}
