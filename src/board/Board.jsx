@@ -24,6 +24,7 @@ function posterBoard(couplets) {
     imageHeight: layout.height,
     layers: layout.layers,
     panels: layout.panels,
+    notes: layout.notes,
   };
 }
 
@@ -38,6 +39,7 @@ export default function Board({
   onFitZoom,
   onHoverPanel,
   onClickPanel,
+  showCues = true,
 }) {
   const board = useMemo(() => posterBoard(couplets), [couplets]);
   const [frame, setFrame] = useState(null);
@@ -61,6 +63,8 @@ export default function Board({
 
   useEffect(() => {
     if (!board) return undefined;
+    document.documentElement.style.setProperty("--board-w", String(board.width));
+    document.documentElement.style.setProperty("--board-h", String(board.height));
     onFitZoom(board.height / board.imageHeight);
     return undefined;
   }, [board, onFitZoom]);
@@ -69,6 +73,9 @@ export default function Board({
   const scale = zoom ?? fitZoom;
 
   const panels = board.panels;
+  const notes = board.notes;
+  const noteLayer = board.layers.find((layer) => String(layer.src).includes("music_only_notes"));
+  const clickedNote = notes.find((note) => note.id === clickedPanel);
   const framed = frame ? panels.find((panel) => panel.id === frame.panel) : null;
   const gradedPanel = grade ? panels.find((panel) => panel.id === steps[grade.index]?.panel) : null;
   const gradeScale = gradedPanel && frame?.panel === gradedPanel.id ? frame.scale : 1;
@@ -105,12 +112,44 @@ export default function Board({
             pointerEvents="none"
           />
         ))}
-        {framed && frame.opacity > 0.02 ? (
-          <g pointerEvents="none">
-            <Frame panel={framed} scale={1} opacity={frame.opacity * 0.45} />
-            <Frame panel={framed} scale={frame.scale} opacity={frame.opacity} />
-          </g>
+        {noteLayer ? (
+          <mask id="note-ink" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" maskType="alpha" style={{ maskType: "alpha" }}>
+            <image
+              href={noteLayer.src}
+              x={noteLayer.x}
+              y={noteLayer.y}
+              width={noteLayer.width}
+              height={noteLayer.height}
+            />
+          </mask>
         ) : null}
+        {showCues && framed && frame.opacity > 0.02 ? (
+          <Frame panel={framed} scale={frame.scale} opacity={frame.opacity} />
+        ) : null}
+        {clickedNote && noteLayer ? (
+          <rect
+            x={clickedNote.x}
+            y={clickedNote.y}
+            width={clickedNote.width}
+            height={clickedNote.height}
+            fill="#ff4b00"
+            mask="url(#note-ink)"
+            pointerEvents="none"
+          />
+        ) : null}
+        {notes.map((note) => (
+          <rect
+            key={note.id}
+            className="note-hit"
+            x={note.x}
+            y={note.y}
+            width={note.width}
+            height={note.height}
+            fill="transparent"
+            stroke="transparent"
+            onClick={() => onClickPanel(note.id)}
+          />
+        ))}
         {panels.map((panel) => (
           <rect
             key={panel.id}
@@ -119,15 +158,13 @@ export default function Board({
             width={panel.width}
             height={panel.height}
             fill={clickedPanel === panel.id ? "rgba(255, 75, 0, 0.34)" : "transparent"}
-            stroke={hoveredPanel === panel.id && framed?.id !== panel.id ? "#ff4b00" : "transparent"}
+            stroke={hoveredPanel === panel.id ? "#ff4b00" : "transparent"}
             strokeWidth="3"
             vectorEffect="non-scaling-stroke"
             onPointerEnter={() => onHoverPanel(panel.id)}
             onPointerLeave={() => onHoverPanel(null)}
             onClick={() => onClickPanel(panel.id)}
-          >
-            <title>{panel.id}</title>
-          </rect>
+          />
         ))}
       </svg>
       {gradedPanel ? (

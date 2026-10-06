@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Board from "./board/Board.jsx";
 import { COUPLETS, shuffleCouplets } from "./board/couplets.js";
 import Lyrics from "./ui/Lyrics.jsx";
-import Transport from "./ui/Transport.jsx";
+import { CanvasTools, Playback } from "./ui/Transport.jsx";
 import useSong, { playResponse, songTime } from "./audio/useSong.js";
 import { gradeAt, promptClose, promptForPanel, responseOnGrade, steps } from "./data/sequence.js";
 import { bindZoom } from "./scene/zoomBus.js";
@@ -23,6 +23,9 @@ export default function App() {
   const [zoom, setZoom] = useState(null);
   const [panning, setPanning] = useState(false);
   const [couplets, setCouplets] = useState(() => shuffleCouplets(COUPLETS));
+  const [mode, setMode] = useState("shuffled");
+  const [showCues, setShowCues] = useState(true);
+  const recallPlayed = useRef(new Set());
   const statusRef = useRef(status);
   statusRef.current = status;
 
@@ -36,7 +39,7 @@ export default function App() {
     if (!prompt || judged.current.has(prompt.index)) return;
     judged.current.add(prompt.index);
     const value = gradeAt(now, prompt);
-    if (responseOnGrade(value)) playResponse(prompt);
+    if (responseOnGrade(value) && !prompt.dexterity) playResponse(prompt);
     setGrade({ index: prompt.index, value });
   }, []);
 
@@ -55,6 +58,20 @@ export default function App() {
   }, [status, time]);
 
   useEffect(() => {
+    if (status !== "playing") return undefined;
+    for (const step of steps) {
+      if (!step.dexterity || step.chainIndex !== 0 || !step.response) continue;
+      if (recallPlayed.current.has(step.recallId)) continue;
+      if (time < step.response.start) continue;
+      const elapsed = time - step.response.start;
+      if (elapsed >= step.response.duration) continue;
+      recallPlayed.current.add(step.recallId);
+      playResponse(step, elapsed);
+    }
+    return undefined;
+  }, [status, time]);
+
+  useEffect(() => {
     if (!grade) return undefined;
     const id = window.setTimeout(() => setGrade(null), 2500);
     return () => window.clearTimeout(id);
@@ -63,6 +80,7 @@ export default function App() {
   useEffect(() => {
     if (status === "playing" || status === "paused") return undefined;
     judged.current.clear();
+    recallPlayed.current.clear();
     setGrade(null);
     return undefined;
   }, [status]);
@@ -89,6 +107,7 @@ export default function App() {
     const stage = stageRef.current;
     if (!stage) return undefined;
     const onWheel = (event) => {
+      if (event.target.closest(".canvas-tools")) return;
       event.preventDefault();
       const current = zoomRef.current ?? fitZoom.current ?? 1;
       setZoomClamped(current / (1 + event.deltaY * 0.001));
@@ -147,6 +166,22 @@ export default function App() {
     setPanning(false);
   };
 
+  const onShuffle = () => {
+    if (mode === "linear") return;
+    setCouplets((current) => {
+      const next = shuffleCouplets(current);
+      const same = next.every((item, index) => item.src === current[index].src);
+      return same ? [...next.slice(1), next[0]] : next;
+    });
+  };
+
+  const onMode = (next) => {
+    if (next === mode) return;
+    setMode(next);
+    setCouplets(next === "linear" ? [...COUPLETS] : shuffleCouplets(COUPLETS));
+    stop();
+  };
+
   return (
     <div id="app">
       <div
@@ -173,6 +208,7 @@ export default function App() {
           onFitZoom={onFitZoom}
           onHoverPanel={setHoveredPanel}
           onClickPanel={onClickPanel}
+          showCues={showCues}
         />
         {countdown ? (
           <div className="countdown" aria-live="assertive">
@@ -182,19 +218,26 @@ export default function App() {
       </div>
       <section className="player" aria-label="Player">
         <Lyrics status={status} time={time} error={error} />
-        <Transport
-          status={status}
+        <div className="player-actions">
+          <button
+            type="button"
+            className="shuffle shuffle--dock"
+            onClick={onShuffle}
+            disabled={mode === "linear"}
+          >
+            Shuffle
+          </button>
+          <Playback status={status} onPlay={play} onPause={pause} onStop={stop} />
+        </div>
+        <CanvasTools
           volume={volume}
           onVolume={setVolume}
-          onPlay={play}
-          onPause={pause}
-          onStop={stop}
-          onShuffle={() => {
-            setCouplets((current) => {
-              const next = shuffleCouplets(current);
-              const same = next.every((item, index) => item.src === current[index].src);
-              return same ? [...next.slice(1), next[0]] : next;
-            });
+          showCues={showCues}
+          onToggleCues={() => setShowCues((current) => !current)}
+          mode={mode}
+          onMode={onMode}
+          onOpenSettings={() => {
+            if (status === "playing" || status === "counting") pause();
           }}
         />
       </section>

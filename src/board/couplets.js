@@ -9,10 +9,33 @@ export const BLANK = {
 };
 
 export const MUSIC = {
-  src: `${ROOT}/Schnitzelbank_music.png`,
+  src: `${ROOT}/Music/Schnitzelbank_music_only_staff.png`,
   width: 1600,
   height: 400,
 };
+
+const MUSIC_NOTES = `${ROOT}/Music/Schnitzelbank_music_only_notes.png`;
+const MUSIC_LYRICS = `${ROOT}/Music/Schnitzelbank_music_lyrics.png`;
+
+// Each entry is one note in the notes PNG. The shapes do not touch,
+// so a single picture can still be clicked note by note.
+const NOTE_SHAPES = [
+  { x: 156, y: 174, width: 44, height: 122 },
+  { x: 218, y: 122, width: 42, height: 121 },
+  { x: 299, y: 72, width: 42, height: 125 },
+  { x: 382, y: 51, width: 40, height: 86 },
+  { x: 498, y: 25, width: 41, height: 116 },
+  { x: 587, y: 14, width: 38, height: 88 },
+  { x: 661, y: 20, width: 39, height: 114 },
+  { x: 760, y: 29, width: 41, height: 127 },
+  { x: 874, y: 21, width: 42, height: 126 },
+  { x: 952, y: 30, width: 46, height: 122 },
+  { x: 1028, y: 54, width: 51, height: 121 },
+  { x: 1126, y: 71, width: 54, height: 119 },
+  { x: 1242, y: 121, width: 63, height: 113 },
+  { x: 1325, y: 147, width: 66, height: 109 },
+  { x: 1418, y: 203, width: 93, height: 110 },
+];
 
 export const PANEL = {
   src: `${ROOT}/Schnitzelbank_panel.png`,
@@ -148,9 +171,18 @@ export function layoutCouplets(couplets) {
     layers: [
       { src: BLANK.src, x: 0, y: 0, width: BLANK.width, height: BLANK.height },
       { src: MUSIC.src, x: 0, y: musicY, width: MUSIC.width, height: MUSIC.height },
+      { src: MUSIC_NOTES, x: 0, y: musicY, width: MUSIC.width, height: MUSIC.height },
+      { src: MUSIC_LYRICS, x: 0, y: musicY, width: MUSIC.width, height: MUSIC.height },
       { src: PANEL.src, x: panelX, y: panelY, width: panelWidth, height: panelHeight },
       ...tiles,
     ],
+    notes: NOTE_SHAPES.map((shape, index) => ({
+      id: `N${index + 1}`,
+      x: shape.x,
+      y: musicY + shape.y,
+      width: shape.width,
+      height: shape.height,
+    })),
     panels,
   };
 }

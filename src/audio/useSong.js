@@ -61,12 +61,14 @@ function begin(position) {
   startStem(engine.buffers.caller, when, position);
 }
 
-export function playResponse(step) {
+export function playResponse(step, elapsed = 0) {
   if (!step?.response || engine.status !== "playing" || !engine.buffers?.audience) return;
+  const duration = step.response.duration - elapsed;
+  if (duration <= 0.05) return;
   const source = engine.context.createBufferSource();
   source.buffer = engine.buffers.audience;
   source.connect(engine.master);
-  source.start(0, step.response.start, Math.max(0.05, step.response.duration));
+  source.start(0, step.response.start + Math.max(0, elapsed), duration);
   engine.responses.push(source);
   source.onended = () => {
     const index = engine.responses.indexOf(source);

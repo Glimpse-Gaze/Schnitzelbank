@@ -7,8 +7,8 @@ const LATE_RATIO = 0.3;
 const RECALL_LEAD = 1;
 
 const REFRAIN = [
-  { text: "Oh, du schöne,", voice: "narrator", repeat: 2 },
-  { text: "oh, du schöne, Schnitzelbank", voice: "narrator" },
+  { text: "Oh, du schöne,", voice: "narrator", repeat: 3 },
+  { text: "Schnitzelbank", voice: "narrator" },
 ];
 
 export const steps = [];
@@ -33,7 +33,7 @@ function labelOf(name) {
 function prepare(cue, index) {
   const echo = cue.echo === true;
   const prompt = Boolean(cue.panel && cue.perfect != null && (echo || cue.perfect > cue.start));
-  const lead = !prompt ? 0 : echo ? RECALL_LEAD : cue.perfect - cue.start;
+  const lead = !prompt ? 0 : cue.lead ?? (echo ? RECALL_LEAD : cue.perfect - cue.start);
   const perfect = prompt ? cue.perfect : null;
   return {
     ...cue,
@@ -54,11 +54,36 @@ export function installSequence(markers, duration) {
       label: labelOf(marker.name),
     }));
   const cues = [];
+  const introduced = [];
+  const pushRecall = (start, end) => {
+    if (!introduced.length || !(end > start)) return;
+    const chain = [...introduced].reverse();
+    const slot = (end - start) / chain.length;
+    chain.forEach((item, index) => {
+      cues.push({
+        panel: item.panel,
+        start: start + index * slot,
+        end: start + (index + 1) * slot,
+        echo: true,
+        dexterity: true,
+        chainIndex: index,
+        recallId: start,
+        perfect: start + index * slot,
+        lead: slot,
+        lines: [{ text: item.label, voice: "audience" }],
+        response: index === 0 ? { start, duration: end - start } : undefined,
+      });
+    });
+  };
   for (let index = 0; index < points.length; index += 1) {
     const point = points[index];
-    if (point.kind === "ad" || !point.kind) continue;
+    if (point.kind === "ad") continue;
     const nextNamed = points.slice(index + 1).find((item) => item.kind);
     const end = nextNamed?.time ?? duration;
+    if (!point.kind) {
+      if (nextNamed?.kind === "ref") pushRecall(point.time, nextNamed.time);
+      continue;
+    }
     if (point.kind === "ref") {
       cues.push({
         panel: "R0P0",
@@ -69,16 +94,7 @@ export function installSequence(markers, duration) {
       continue;
     }
     if (point.kind === "re") {
-      const next = points[index + 1];
-      cues.push({
-        panel: panelFor(point.label),
-        start: point.time,
-        end,
-        echo: true,
-        perfect: point.time,
-        lines: [{ text: point.label, voice: "audience" }],
-        response: { start: point.time, duration: (next?.time ?? duration) - point.time },
-      });
+      pushRecall(point.time, end);
       continue;
     }
     const answer = points.slice(index + 1).find((item) => item.kind === "ad");
@@ -86,10 +102,13 @@ export function installSequence(markers, duration) {
     const answerIndex = points.indexOf(answer);
     const boundary = points[answerIndex + 1];
     const following = points.slice(answerIndex + 1).find((item) => item.kind);
+    const recallAt = boundary && !boundary.kind && following?.kind === "ref" ? boundary.time : null;
+    const panel = panelFor(point.label);
+    if (panel) introduced.push({ panel, label: point.label });
     cues.push({
-      panel: panelFor(point.label),
+      panel,
       start: point.time,
-      end: following?.time ?? duration,
+      end: recallAt ?? following?.time ?? duration,
       perfect: answer.time,
       lines: [
         { text: `Ist das nicht ein ${point.label}?`, voice: "narrator" },
@@ -134,6 +153,16 @@ export function openPrompts(time) {
   });
 }
 
+// The opening accelerates from rest. After that the shrink is the old straight line,
+// so the frame meets the picture on a steady, readable pace.
+function cueTravel(amount) {
+  const t = Math.min(1, Math.max(0, amount));
+  const split = 0.3;
+  if (t >= split) return t;
+  const u = t / split;
+  return split * u * u * (2 - u);
+}
+
 export function frameAt(time) {
   const open = openPrompts(time);
   if (!open.length) return null;
@@ -142,7 +171,7 @@ export function frameAt(time) {
     ? upcoming.reduce((best, item) => (item.perfect < best.perfect ? item : best))
     : open.reduce((best, item) => (item.perfect > best.perfect ? item : best));
   const elapsed = Math.max(0, time - step.open);
-  const arrived = Math.min(1, elapsed / step.lead);
+  const arrived = step.lead > 0 ? cueTravel(elapsed / step.lead) : 1;
   const late = Math.max(0, time - step.perfect);
   const opacity = late === 0 ? 1 : Math.max(0, 1 - late / (step.lead * LATE_RATIO));
   return {
