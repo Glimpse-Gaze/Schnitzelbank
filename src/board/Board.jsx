@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { frameAt, steps } from "../data/sequence.js";
 import { songTime } from "../audio/useSong.js";
+import { layoutCouplets } from "./couplets.js";
 
-const PANEL_NAME = /^R\d+P\d+$/;
 const CANVAS_PAD = 160;
 const GRADE_LABEL = {
   perfect: "Perfect",
@@ -12,46 +12,23 @@ const GRADE_LABEL = {
   late: "Too late",
 };
 
-function readBoard(markup) {
-  const xml = new DOMParser().parseFromString(markup, "image/svg+xml");
-  const svg = xml.documentElement;
-  const viewBox = svg.getAttribute("viewBox") ?? "0 0 1 1";
-  const [, , width, height] = viewBox.split(/[\s,]+/).map(Number);
-  const images = new Map();
-  for (const image of svg.querySelectorAll("image")) {
-    images.set(image.id, {
-      width: Number(image.getAttribute("width")),
-      height: Number(image.getAttribute("height")),
-      href: image.getAttribute("href") || image.getAttribute("xlink:href"),
-    });
-  }
-  const nodes = [...svg.querySelectorAll("use")].map((use) => {
-    const href = (use.getAttribute("href") || "").replace("#", "");
-    const image = images.get(href);
-    return {
-      id: use.id,
-      x: Number(use.getAttribute("x")) || 0,
-      y: Number(use.getAttribute("y")) || 0,
-      width: image?.width ?? 0,
-      height: image?.height ?? 0,
-      href: image?.href ?? "",
-    };
-  });
-  const imageWidth = width || 1;
-  const imageHeight = height || 1;
+function posterBoard(couplets) {
+  const layout = layoutCouplets(couplets);
   return {
-    viewBox: `${-CANVAS_PAD} ${-CANVAS_PAD} ${imageWidth + CANVAS_PAD * 2} ${imageHeight + CANVAS_PAD * 2}`,
-    width: imageWidth + CANVAS_PAD * 2,
-    height: imageHeight + CANVAS_PAD * 2,
+    viewBox: `${-CANVAS_PAD} ${-CANVAS_PAD} ${layout.width + CANVAS_PAD * 2} ${layout.height + CANVAS_PAD * 2}`,
+    width: layout.width + CANVAS_PAD * 2,
+    height: layout.height + CANVAS_PAD * 2,
     originX: -CANVAS_PAD,
     originY: -CANVAS_PAD,
-    imageWidth,
-    imageHeight,
-    nodes,
+    imageWidth: layout.width,
+    imageHeight: layout.height,
+    layers: layout.layers,
+    panels: layout.panels,
   };
 }
 
 export default function Board({
+  couplets,
   status,
   hoveredPanel,
   clickedPanel,
@@ -62,26 +39,8 @@ export default function Board({
   onHoverPanel,
   onClickPanel,
 }) {
-  const [board, setBoard] = useState(null);
+  const board = useMemo(() => posterBoard(couplets), [couplets]);
   const [frame, setFrame] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/Schnitzel_2P.svg")
-      .then((response) => {
-        if (!response.ok) throw new Error("missing");
-        return response.text();
-      })
-      .then((markup) => {
-        if (!cancelled) setBoard(readBoard(markup));
-      })
-      .catch(() => {
-        if (!cancelled) setBoard(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (status !== "playing") return undefined;
@@ -106,12 +65,10 @@ export default function Board({
     return undefined;
   }, [board, onFitZoom]);
 
-  if (!board) return null;
-
   const fitZoom = board.height / board.imageHeight;
   const scale = zoom ?? fitZoom;
 
-  const panels = board.nodes.filter((node) => PANEL_NAME.test(node.id));
+  const panels = board.panels;
   const framed = frame ? panels.find((panel) => panel.id === frame.panel) : null;
   const gradedPanel = grade ? panels.find((panel) => panel.id === steps[grade.index]?.panel) : null;
   const gradeScale = gradedPanel && frame?.panel === gradedPanel.id ? frame.scale : 1;
@@ -129,14 +86,22 @@ export default function Board({
       }}
     >
       <svg viewBox={board.viewBox} role="img" aria-label="Schnitzelbank board">
-        {board.nodes.map((node) => (
+        <rect
+          x="0"
+          y="0"
+          width={board.imageWidth}
+          height={board.imageHeight}
+          fill="#cec5b8"
+          pointerEvents="none"
+        />
+        {board.layers.map((layer) => (
           <image
-            key={node.id}
-            href={node.href}
-            x={node.x}
-            y={node.y}
-            width={node.width}
-            height={node.height}
+            key={`${layer.src}-${layer.x}-${layer.y}`}
+            href={layer.src}
+            x={layer.x}
+            y={layer.y}
+            width={layer.width}
+            height={layer.height}
             pointerEvents="none"
           />
         ))}

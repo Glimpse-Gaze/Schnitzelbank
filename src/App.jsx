@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Board from "./board/Board.jsx";
+import { COUPLETS, shuffleCouplets } from "./board/couplets.js";
 import Lyrics from "./ui/Lyrics.jsx";
 import Transport from "./ui/Transport.jsx";
 import useSong, { playResponse, songTime } from "./audio/useSong.js";
@@ -21,6 +22,7 @@ export default function App() {
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(null);
   const [panning, setPanning] = useState(false);
+  const [couplets, setCouplets] = useState(() => shuffleCouplets(COUPLETS));
   const statusRef = useRef(status);
   statusRef.current = status;
 
@@ -161,6 +163,7 @@ export default function App() {
         onContextMenu={(event) => event.preventDefault()}
       >
         <Board
+          couplets={couplets}
           status={status}
           hoveredPanel={hoveredPanel}
           clickedPanel={clickedPanel}
@@ -186,6 +189,13 @@ export default function App() {
           onPlay={play}
           onPause={pause}
           onStop={stop}
+          onShuffle={() => {
+            setCouplets((current) => {
+              const next = shuffleCouplets(current);
+              const same = next.every((item, index) => item.src === current[index].src);
+              return same ? [...next.slice(1), next[0]] : next;
+            });
+          }}
         />
       </section>
     </div>

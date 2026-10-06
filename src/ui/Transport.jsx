@@ -8,7 +8,7 @@ function Glyph({ children }) {
   );
 }
 
-export default function Transport({ status, volume, onVolume, onPlay, onPause, onStop }) {
+export default function Transport({ status, volume, onVolume, onPlay, onPause, onStop, onShuffle }) {
   return (
     <div className="transport-bar">
       <div className="zoom-controls" role="group" aria-label="Zoom">
@@ -52,6 +52,9 @@ export default function Transport({ status, volume, onVolume, onPlay, onPause, o
           </Glyph>
         </button>
       </div>
+      <button type="button" className="shuffle" onClick={onShuffle}>
+        Shuffle
+      </button>
       <label className="volume">
         <span>Volume</span>
         <input

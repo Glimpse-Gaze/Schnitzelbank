@@ -276,6 +276,23 @@ body {
   stroke-width: 5;
 }
 
+.shuffle {
+  height: 74px;
+  padding: 0 18px;
+  border: 3px solid #111;
+  border-radius: 16px;
+  background: #f7f1e6;
+  color: #111;
+  font: 700 13px/1 Georgia, "Palatino Linotype", serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.shuffle:hover {
+  background: #fffaf2;
+}
+
 .volume {
   display: flex;
   align-items: center;

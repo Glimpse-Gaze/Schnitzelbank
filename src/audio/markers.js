@@ -11,6 +11,16 @@ const PANELS = {
   "wagen rad": "R2P1",
   "krum und grad": "R2P2",
   "krumm und grad": "R2P2",
+  "grosses glas": "R2P3",
+  "ochsen blas": "R2P4",
+  "haufen mist": "R3P1",
+  "schnickel fritz": "R3P2",
+  "dicke frau": "R3P3",
+  "fette sau": "R3P4",
+  "langer mann": "R4P1",
+  tannenbaum: "R4P2",
+  "hochzeits ring": "R4P3",
+  "gefahrliches ding": "R4P4",
 };
 
 function readString(view, offset, length) {
@@ -52,6 +62,10 @@ export function readMarkers(buffer) {
 export function panelFor(label) {
   const key = label
     .toLowerCase()
+    .replace(/ä/g, "a")
+    .replace(/ö/g, "o")
+    .replace(/ü/g, "u")
+    .replace(/ß/g, "ss")
     .replace(/\u2026|\.\.\./g, "")
     .replace(/[^a-z\s]/g, "")
     .replace(/\s+/g, " ")
