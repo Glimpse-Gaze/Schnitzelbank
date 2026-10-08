@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { frameAt, steps } from "../data/sequence.js";
+import { framesAt, holdAt, steps } from "../data/sequence.js";
 import { songTime } from "../audio/useSong.js";
 import { layoutCouplets } from "./couplets.js";
 import { layoutKaszebe } from "./kaszebe.js";
@@ -59,6 +59,9 @@ export default function Board({
   onFitZoom,
   onHoverPanel,
   onClickPanel,
+  onHoldStart,
+  onHoldEnd,
+  holding = false,
   showCues = true,
   preview = false,
 }) {
@@ -66,13 +69,16 @@ export default function Board({
     () => (song === "kaszebe" ? kaszebeBoard(cards) : posterBoard(couplets)),
     [song, couplets, cards],
   );
-  const [frame, setFrame] = useState(null);
+  const [frames, setFrames] = useState([]);
+  const [hold, setHold] = useState(null);
 
   useEffect(() => {
     if (status !== "playing") return undefined;
     let raf = 0;
     const tick = () => {
-      setFrame(frameAt(songTime()));
+      const now = songTime();
+      setFrames(framesAt(now));
+      setHold(holdAt(now));
       raf = requestAnimationFrame(tick);
     };
     tick();
@@ -81,7 +87,8 @@ export default function Board({
 
   useEffect(() => {
     if (status === "playing" || status === "paused") return undefined;
-    setFrame(null);
+    setFrames([]);
+    setHold(null);
     return undefined;
   }, [status]);
 
@@ -100,9 +107,12 @@ export default function Board({
   const notes = board.notes;
   const noteLayer = board.layers.find((layer) => String(layer.src).includes("music_only_notes"));
   const clickedNote = notes.find((note) => note.id === clickedPanel);
-  const framed = frame ? panels.find((panel) => panel.id === frame.panel) : null;
+  const visibleFrames = frames
+    .map((frame) => ({ frame, panel: panels.find((panel) => panel.id === frame.panel) }))
+    .filter((item) => item.panel && item.frame.opacity > 0.02);
   const gradedPanel = grade ? panels.find((panel) => panel.id === steps[grade.index]?.panel) : null;
-  const gradeScale = gradedPanel && frame?.panel === gradedPanel.id ? frame.scale : 1;
+  const gradeFrame = gradedPanel ? visibleFrames.find((item) => item.panel.id === gradedPanel.id) : null;
+  const gradeScale = gradeFrame ? gradeFrame.frame.scale : 1;
   const gradeTop = gradedPanel
     ? gradedPanel.y + gradedPanel.height / 2 - (gradedPanel.height * gradeScale) / 2
     : 0;
@@ -147,8 +157,16 @@ export default function Board({
             />
           </mask>
         ) : null}
-        {showCues && framed && frame.opacity > 0.02 ? (
-          <Frame panel={framed} scale={frame.scale} opacity={frame.opacity} />
+        {showCues
+          ? visibleFrames.map(({ frame, panel }) => (
+              <Frame key={frame.index} panel={panel} scale={frame.scale} opacity={frame.opacity} />
+            ))
+          : null}
+        {showCues && hold ? (
+          <HoldBar
+            bounds={unionOf(hold.panels.map((id) => panels.find((panel) => panel.id === id)).filter(Boolean))}
+            progress={holding ? hold.progress : 0}
+          />
         ) : null}
         {clickedNote && noteLayer ? (
           <rect
@@ -187,6 +205,15 @@ export default function Board({
             vectorEffect="non-scaling-stroke"
             onPointerEnter={() => onHoverPanel(panel.id)}
             onPointerLeave={() => onHoverPanel(null)}
+            onPointerDown={(event) => {
+              if (event.button !== 0 || !onHoldStart) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              onHoldStart(panel.id, clickPoint(event, panel));
+            }}
+            onPointerUp={(event) => {
+              if (event.button !== 0 || !onHoldEnd) return;
+              onHoldEnd();
+            }}
             onClick={(event) => onClickPanel(panel.id, clickPoint(event, panel))}
           />
         ))}
@@ -248,7 +275,7 @@ function GradeToast({ grade, panel, board, top, label }) {
       }}
     >
       <span
-        key={`${grade.index}-${grade.value}`}
+        key={`${grade.index}-${grade.part ?? "tap"}-${grade.value}`}
         className={["grade-float", `is-${grade.value}`].join(" ")}
         style={{
           "--slide-x": point ? `${Math.sin(rad) * 36}px` : "0px",
@@ -261,6 +288,33 @@ function GradeToast({ grade, panel, board, top, label }) {
         {label ?? GRADE_LABEL[grade.value] ?? ""}
       </span>
     </div>
+  );
+}
+
+function unionOf(panels) {
+  const left = Math.min(...panels.map((panel) => panel.x));
+  const top = Math.min(...panels.map((panel) => panel.y));
+  const right = Math.max(...panels.map((panel) => panel.x + panel.width));
+  const bottom = Math.max(...panels.map((panel) => panel.y + panel.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+function HoldBar({ bounds, progress }) {
+  if (!bounds || !Number.isFinite(bounds.width)) return null;
+  const y = bounds.y + Math.min(36, bounds.height * 0.22);
+  const x0 = bounds.x + 8;
+  const x1 = bounds.x + bounds.width - 8;
+  const fill = x0 + (x1 - x0) * progress;
+  return (
+    <g pointerEvents="none">
+      <line x1={x0} y1={y} x2={x1} y2={y} stroke="#1a1a1a" strokeWidth="16" strokeLinecap="round" opacity="0.72" />
+      {progress > 0.01 ? (
+        <line x1={x0} y1={y} x2={fill} y2={y} stroke="#ff4b00" strokeWidth="16" strokeLinecap="butt" />
+      ) : null}
+      <circle cx={x0} cy={y} r="15" fill="#ff4b00" stroke="#1a1a1a" strokeWidth="3" />
+      <circle cx={x1} cy={y} r="16" fill="#f7f1e6" stroke="#1a1a1a" strokeWidth="4" />
+      <circle cx={x1} cy={y} r="5" fill="#1a1a1a" />
+    </g>
   );
 }
 

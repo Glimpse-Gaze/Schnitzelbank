@@ -32,7 +32,7 @@ function labelOf(name) {
 
 function prepare(cue, index) {
   const echo = cue.echo === true;
-  const prompt = Boolean(cue.panel && cue.perfect != null && (echo || cue.perfect > cue.start));
+  const prompt = Boolean(cue.panel && cue.perfect != null && (echo || cue.hold || cue.perfect > cue.start));
   const lead = !prompt ? 0 : cue.lead ?? (echo ? RECALL_LEAD : cue.perfect - cue.start);
   const perfect = prompt ? cue.perfect : null;
   return {
@@ -147,14 +147,43 @@ export function stepAt(time) {
 }
 
 export function promptClose(step) {
-  return step.perfect + step.lead * (step.lateRatio ?? LATE_RATIO);
+  return step.perfect + (step.settle ?? 0) + step.lead * (step.lateRatio ?? LATE_RATIO);
 }
 
 export function openPrompts(time) {
   return steps.filter((step) => {
-    if (!step.prompt) return false;
+    if (!step.prompt || step.hold) return false;
     return time >= step.open && time <= promptClose(step);
   });
+}
+
+export function releaseClose(step) {
+  return step.releaseAt + step.releaseLead * (step.releaseLateRatio ?? 1);
+}
+
+function approachOf(step) {
+  return step.approach ?? step.lead;
+}
+
+export function holdAt(time) {
+  for (const step of steps) {
+    if (!step.hold) continue;
+    const began = step.perfect - approachOf(step);
+    if (time < began || time > releaseClose(step)) continue;
+    const length = Math.max(0.2, step.releaseAt - step.perfect);
+    const progress = time <= step.perfect ? 0 : Math.min(1, (time - step.perfect) / length);
+    return { index: step.index, panels: step.panels, progress };
+  }
+  return null;
+}
+
+export function holdForPanel(time, panel) {
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index];
+    if (!step.hold || !step.panels?.includes(panel)) continue;
+    if (time >= step.open && time <= promptClose(step)) return step;
+  }
+  return null;
 }
 
 // The opening accelerates from rest. After that the shrink is the old straight line,
@@ -167,24 +196,47 @@ function cueTravel(amount) {
   return split * u * u * (2 - u);
 }
 
-export function frameAt(time) {
-  const open = openPrompts(time);
-  if (!open.length) return null;
-  const upcoming = open.filter((step) => time <= step.perfect);
-  const step = upcoming.length
-    ? upcoming.reduce((best, item) => (item.perfect < best.perfect ? item : best))
-    : open.reduce((best, item) => (item.perfect > best.perfect ? item : best));
-  const elapsed = Math.max(0, time - step.open);
-  const arrived = step.lead > 0 ? cueTravel(elapsed / step.lead) : 1;
-  const late = Math.max(0, time - step.perfect);
+function fadeIn(amount) {
+  const t = Math.min(1, Math.max(0, amount));
+  return t * t * (3 - 2 * t);
+}
+
+function paintFrame(step, time) {
+  const approach = approachOf(step);
+  const began = step.perfect - approach;
+  const elapsed = Math.max(0, time - began);
+  const arrived = approach > 0 ? cueTravel(Math.min(1, elapsed / approach)) : 1;
+  const late = Math.max(0, time - (step.perfect + (step.settle ?? 0)));
   const lateSpan = step.lead * (step.lateRatio ?? LATE_RATIO);
-  const opacity = late === 0 || lateSpan <= 0 ? 1 : Math.max(0, 1 - late / lateSpan);
+  const fade = late === 0 || lateSpan <= 0 ? 1 : Math.max(0, 1 - late / lateSpan);
+  const introSpan = step.approach ? 0.22 : 0;
+  const intro = introSpan <= 0 ? 1 : fadeIn(Math.min(1, elapsed / introSpan));
+  const opacity = fade * intro;
   return {
     panel: step.panel,
     index: step.index,
     scale: 1 + (1 - arrived) * 0.55,
     opacity,
   };
+}
+
+export function framesAt(time) {
+  return steps
+    .filter((step) => {
+      if (!step.prompt) return false;
+      const began = step.perfect - approachOf(step);
+      return time >= began && time <= promptClose(step);
+    })
+    .map((step) => paintFrame(step, time));
+}
+
+export function frameAt(time) {
+  const open = framesAt(time);
+  if (!open.length) return null;
+  const upcoming = open.filter((frame) => time <= steps[frame.index].perfect);
+  return upcoming.length
+    ? upcoming.reduce((best, frame) => (steps[frame.index].perfect < steps[best.index].perfect ? frame : best))
+    : open.reduce((best, frame) => (steps[frame.index].perfect > steps[best.index].perfect ? frame : best));
 }
 
 export function promptForPanel(time, panel) {

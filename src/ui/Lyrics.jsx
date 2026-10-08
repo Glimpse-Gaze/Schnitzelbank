@@ -15,8 +15,8 @@ export default function Lyrics({ status, time, error }) {
         {step ? (
           step.lines.map((line, index) => {
             const audience = line.voice === "audience";
-            const live = step.tone === "reply" || (audience && (answerStarted || step.lines.every((item) => item.voice === "audience")));
-            const waiting = step.tone === "caller" || (audience && !live);
+            const live = audience && (answerStarted || step.lines.every((item) => item.voice === "audience"));
+            const waiting = audience && !live;
             const className = live
               ? "lyrics__line is-audience"
               : waiting

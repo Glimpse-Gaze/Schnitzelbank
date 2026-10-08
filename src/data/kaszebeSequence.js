@@ -1,44 +1,48 @@
 import { installCues } from "./sequence.js";
 
-const NA1 = [
-  { text: "To je krótczé, to je dłudżé, to kaszëbskô stolëca,", voice: "narrator" },
-  { text: "to są basë, to są skrzëpczi, to òznôczô Kaszëba.", voice: "narrator" },
-];
-const RE1 = [
-  { text: "Òznôczô Kaszëba, basë, skrzëpczi,", voice: "audience" },
-  { text: "krótczé, dłudżé, to kaszëbskô stolëca.", voice: "audience" },
-];
-const NA_RIDEL = [
-  { text: "To je ridel, to je ticz,", voice: "narrator" },
-  { text: "to są chòjnë, widłë gnojné.", voice: "narrator" },
-];
-const NA_WHEEL = [
-  { text: "To je prosté, to je krzëwé,", voice: "narrator" },
-  { text: "to je slédné kòło wòzné.", voice: "narrator" },
-];
-const RE_WHEEL = [
-  { text: "Slédné kòło wòzné, prosté, krzëwé,", voice: "audience" },
-  { text: "chòjnë, widłë gnojné, ridel, ticz, òznôczô Kaszëba, basë, skrzëpczi, krótczé, dłudżé, to kaszëbskô stolëca.", voice: "audience" },
-];
-const NA_BIRDS = [
-  { text: "To są hôczi, to są ptôczi,", voice: "narrator" },
-  { text: "to są prësczé półtrojôczi.", voice: "narrator" },
-];
-const RE_BIRDS = [
-  { text: "Hôk, ptôk, półtrojôk,", voice: "audience" },
-  { text: "slédné kòło wòzné, prosté, krzëwé, chòjnë, widłë gnojné, ridel, ticz, òznôczô Kaszëba, basë, skrzëpczi, krótczé, dłudżé, to kaszëbskô stolëca.", voice: "audience" },
-];
+// A single picture held about as long as a two-picture line is a sustain.
+// Shorter singles stay a single tap. Two pictures share one target and take two clicks.
+const HOLD_SINGLE = 1.15;
 
-// Caller lines stay up through each verse. Audience markers replace them.
-const REGIONS = [
-  { until: 17.667, tone: "caller", lines: NA1 },
-  { until: 25.867, tone: "reply", lines: RE1 },
-  { until: 31.417, tone: "caller", lines: NA_RIDEL },
-  { until: 37.417, tone: "caller", lines: NA_WHEEL },
-  { until: 53.5, tone: "reply", lines: RE_WHEEL },
-  { until: 58.833, tone: "caller", lines: NA_BIRDS },
-  { until: Infinity, tone: "reply", lines: RE_BIRDS },
-];
+export function pairTarget(panels) {
+  return panels.join("+");
+}
+
+const PHRASES = {
+  krotkiedlugiekaszebskostolica: {
+    caller: ["To je krótczé, to je dłudżé,", "to kaszëbskô stolëca."],
+  },
+  baseskrzepcekaszeba: {
+    caller: ["To są basë, to są skrzëpczi,", "to òznôczô Kaszëba."],
+  },
+  rydeltycz: {
+    caller: ["To je ridel,", "to je ticz."],
+    reply: ["ridel, ticz"],
+  },
+  hojnewidlygnojne: {
+    caller: ["To są chòjnë,", "widłë gnojné."],
+    reply: ["chòjnë, widłë gnojné"],
+  },
+  prostekrzywe: {
+    caller: ["To je prosté,", "to je krzëwé."],
+  },
+  prostykrzywy: {
+    reply: ["prosté, krzëwé"],
+  },
+  tylnekolo: {
+    caller: ["To je slédné", "kòło wòzné."],
+    reply: ["slédné kòło wòzné"],
+  },
+  kaszeba: { reply: ["Òznôczô Kaszëba"] },
+  baseskrzepce: { reply: ["basë, skrzëpczi"] },
+  krotkiedlugie: { reply: ["krótczé, dłudżé"] },
+  kaszebskostolica: { reply: ["to kaszëbskô stolëca"] },
+  kaszebksostolica: { reply: ["to kaszëbskô stolëca"] },
+  hoczi: { caller: ["To są hôczi."], reply: ["Hôk"] },
+  ptoczi: { caller: ["To są ptôczi."], reply: ["ptôk"] },
+  poltrojeczi: { caller: ["To są prësczé", "półtrojôczi."] },
+  poltorak: { reply: ["półtrojôk"] },
+};
 
 const RE_PANELS = [
   ["kaszebksostolica", ["R1P1.3"]],
@@ -58,7 +62,7 @@ const RE_PANELS = [
 
 function fold(name) {
   return name
-    .replace(/^RE:\s*/i, "")
+    .replace(/^(?:RE|NA):\s*/i, "")
     .toLowerCase()
     .replace(/ł/g, "l")
     .normalize("NFD")
@@ -73,58 +77,185 @@ function panelsFor(name) {
   return found[1];
 }
 
-function regionAt(time) {
-  return REGIONS.find((region) => time < region.until) ?? REGIONS[REGIONS.length - 1];
+function linesFor(marker) {
+  const phrase = PHRASES[fold(marker.name)];
+  if (!phrase) throw new Error(`Unmapped Kaszebe lyric: ${marker.name}`);
+  const reply = marker.name.startsWith("RE:");
+  const voice = reply ? "audience" : "narrator";
+  return phrase[reply ? "reply" : "caller"].map((text) => ({ text, voice }));
 }
 
-function pushNarration(cues, from, to) {
-  let start = from;
-  while (start < to - 0.02) {
-    const region = regionAt(start + 0.02);
-    const end = Math.min(to, region.until);
-    if (!(end > start + 0.05)) {
-      start = Math.max(end, start + 0.05);
-      continue;
-    }
-    cues.push({
-      start,
-      end,
-      lines: region.lines,
-      tone: region.tone,
-    });
-    start = end;
+// The rectangle meets the picture at the marker.
+const APPROACH = 1.25;
+const GRADE_LEAD = 0.55;
+const LATE_WINDOW = 0.22;
+const SETTLE = 0.16;
+const KASZEBA_LATER = 0.2;
+const KASZEBA_END_EARLIER = 0.3;
+const STOLECA_END_EARLIER = 0.1;
+const KOLO_END_EARLIER = 0.12;
+const PROSTE_LATER = 0.12;
+const HOJNE_END_EARLIER = 0.2;
+const HOJNE_PANEL = pairTarget(["R2P1.3", "R2P1.4"]);
+
+function isPhrase(marker) {
+  return marker.name.startsWith("NA:") || marker.name.startsWith("RE:");
+}
+
+function pointKind(marker) {
+  const key = fold(marker.name);
+  if (key.startsWith("endofhojne")) return "end-hojne";
+  if (key === "widle") return "widle";
+  if (key.startsWith("endof")) return "ignore";
+  return "second";
+}
+
+function pushClick(cues, { panel, perfect, end, lines, tone, span }) {
+  cues.push({
+    panel,
+    perfect,
+    lead: GRADE_LEAD,
+    approach: APPROACH,
+    lateRatio: LATE_WINDOW / GRADE_LEAD,
+    settle: SETTLE,
+    span,
+    start: perfect - APPROACH,
+    end,
+    lines,
+    tone,
+  });
+}
+
+function pushHold(cues, { panel, perfect, releaseAt, end, lines, tone, span }) {
+  cues.push({
+    hold: true,
+    panel,
+    panels: [panel],
+    perfect,
+    lead: GRADE_LEAD,
+    approach: APPROACH,
+    lateRatio: LATE_WINDOW / GRADE_LEAD,
+    settle: SETTLE,
+    releaseAt,
+    releaseLead: 0.26,
+    releaseLateRatio: 0.55,
+    span,
+    start: perfect - APPROACH,
+    end,
+    lines,
+    tone,
+  });
+}
+
+function addHojne(cues, marker, points, lyricEnd, lines, tone) {
+  const endHojne = points.find((point) => pointKind(point) === "end-hojne");
+  const widle = points.find((point) => pointKind(point) === "widle");
+  if (!endHojne || !widle) throw new Error(`Hojne hold markers missing after ${marker.time}`);
+  const areaEnd = marker.time + marker.duration;
+  pushHold(cues, {
+    panel: HOJNE_PANEL,
+    perfect: marker.time,
+    releaseAt: endHojne.time - HOJNE_END_EARLIER,
+    end: widle.time,
+    lines,
+    tone,
+    span: endHojne.time - HOJNE_END_EARLIER - marker.time,
+  });
+  pushHold(cues, {
+    panel: HOJNE_PANEL,
+    perfect: widle.time,
+    releaseAt: areaEnd - HOJNE_END_EARLIER,
+    end: lyricEnd,
+    lines,
+    tone,
+    span: areaEnd - HOJNE_END_EARLIER - widle.time,
+  });
+}
+
+function addPair(cues, marker, points, panels, lyricEnd, lines, tone) {
+  const second = points.find((point) => pointKind(point) === "second");
+  if (!second) throw new Error(`Second click marker missing after ${marker.name} at ${marker.time}`);
+  const later = fold(marker.name) === "prostykrzywy" ? PROSTE_LATER : 0;
+  const panel = pairTarget(panels);
+  const areaEnd = marker.time + marker.duration;
+  pushClick(cues, {
+    panel,
+    perfect: marker.time + later,
+    end: second.time,
+    lines,
+    tone,
+    span: second.time - marker.time,
+  });
+  pushClick(cues, {
+    panel,
+    perfect: second.time + later,
+    end: lyricEnd,
+    lines,
+    tone,
+    span: Math.max(0.2, areaEnd - second.time),
+  });
+}
+
+function addSingle(cues, marker, panels, lyricEnd, lines, tone) {
+  const span = marker.duration;
+  const key = fold(marker.name);
+  const panel = panels[0];
+  let perfect = marker.time;
+  let releaseAt = marker.time + span;
+  if (key === "kaszeba") {
+    perfect += KASZEBA_LATER;
+    releaseAt += KASZEBA_LATER - KASZEBA_END_EARLIER;
   }
+  if (key === "kaszebskostolica" || key === "kaszebksostolica") releaseAt -= STOLECA_END_EARLIER;
+  if (key === "tylnekolo") releaseAt -= KOLO_END_EARLIER;
+  if (span >= HOLD_SINGLE || key === "poltorak") {
+    pushHold(cues, {
+      panel,
+      perfect,
+      releaseAt,
+      end: lyricEnd,
+      lines,
+      tone,
+      span: releaseAt - perfect,
+    });
+    return;
+  }
+  pushClick(cues, {
+    panel,
+    perfect,
+    end: lyricEnd,
+    lines,
+    tone,
+    span,
+  });
 }
 
 export function installKaszebe(markers, duration) {
   const cues = [];
-  let cursor = 0;
-  const replies = markers.filter((marker) => marker.name.startsWith("RE:"));
-  replies.forEach((marker, replyIndex) => {
-    const next = replies[replyIndex + 1];
-    const span = marker.duration > 0
-      ? marker.duration
-      : (next?.time ?? duration) - marker.time;
-    pushNarration(cues, cursor, marker.time);
+  for (let index = 0; index < markers.length; index += 1) {
+    const marker = markers[index];
+    if (!isPhrase(marker)) continue;
+    let next = index + 1;
+    const points = [];
+    while (next < markers.length && !isPhrase(markers[next])) {
+      points.push(markers[next]);
+      next += 1;
+    }
+    const lyricEnd = markers[next]?.time ?? duration;
+    const tone = marker.name.startsWith("RE:") ? "reply" : "caller";
+    const lines = linesFor(marker);
+    if (!marker.name.startsWith("RE:")) {
+      cues.push({ start: marker.time, end: lyricEnd, lines, tone });
+      continue;
+    }
+    const key = fold(marker.name);
+    if (key === "hojnewidlygnojne") {
+      addHojne(cues, marker, points, lyricEnd, lines, tone);
+      continue;
+    }
     const panels = panelsFor(marker.name);
-    const slice = span / panels.length;
-    panels.forEach((panel, index) => {
-      const start = marker.time + index * slice;
-      const region = regionAt(start);
-      cues.push({
-        panel,
-        start,
-        end: start + slice,
-        perfect: start + slice / 2,
-        lead: slice / 2,
-        lateRatio: 1,
-        span: slice,
-        lines: region.lines,
-        tone: region.tone,
-      });
-    });
-    cursor = marker.time + span;
-  });
-  pushNarration(cues, cursor, duration);
+    if (panels.length > 1) addPair(cues, marker, points, panels, lyricEnd, lines, tone);
+    else addSingle(cues, marker, panels, lyricEnd, lines, tone);
+  }
   installCues(cues, duration);
 }

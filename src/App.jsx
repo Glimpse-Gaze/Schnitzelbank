@@ -5,7 +5,7 @@ import { linearKaszebe, shuffleKaszebe } from "./board/kaszebe.js";
 import Lyrics from "./ui/Lyrics.jsx";
 import { CanvasTools, Playback } from "./ui/Transport.jsx";
 import useSong, { playResponse, setAudienceLoud, songTime } from "./audio/useSong.js";
-import { gradeAt, promptClose, promptForPanel, responseOnGrade, steps } from "./data/sequence.js";
+import { gradeAt, holdForPanel, promptClose, promptForPanel, releaseClose, responseOnGrade, steps } from "./data/sequence.js";
 import { bindZoom } from "./scene/zoomBus.js";
 
 function audienceFade(step) {
@@ -34,14 +34,16 @@ export default function App() {
   const [zoom, setZoom] = useState(null);
   const [panning, setPanning] = useState(false);
   const [orders, setOrders] = useState(() => ({
-    schnitzel: { mode: "shuffled", couplets: shuffleCouplets(COUPLETS) },
-    kaszebe: { mode: "shuffled", ...shuffleKaszebe() },
+    schnitzel: { mode: "linear", couplets: [...COUPLETS] },
+    kaszebe: { mode: "linear", ...linearKaszebe() },
   }));
   const [showCues, setShowCues] = useState(true);
   const recallPlayed = useRef(new Set());
   const misses = useRef(new Set());
   const audienceLoud = useRef(true);
-  const mode = song ? orders[song].mode : "shuffled";
+  const armed = useRef(null);
+  const [holding, setHolding] = useState(false);
+  const mode = song ? orders[song].mode : "linear";
   const statusRef = useRef(status);
   statusRef.current = status;
 
@@ -64,7 +66,7 @@ export default function App() {
     if (statusRef.current !== "playing") return;
     const now = songTime();
     const prompt = promptForPanel(now, name);
-    if (!prompt || judged.current.has(prompt.index)) return;
+    if (!prompt || prompt.hold || judged.current.has(prompt.index)) return;
     judged.current.add(prompt.index);
     const value = gradeAt(now, prompt);
     if (songRef.current === "kaszebe") {
@@ -82,10 +84,61 @@ export default function App() {
     setGrade({ index: prompt.index, value, point: value === "late" ? null : point });
   }, []);
 
+  const missAudience = (step) => {
+    misses.current.add(step.index);
+    audienceLoud.current = false;
+    setAudienceLoud(false, audienceFade(step));
+  };
+
+  const onHoldStart = useCallback((name, point) => {
+    if (statusRef.current !== "playing" || songRef.current !== "kaszebe") return;
+    const now = songTime();
+    const step = holdForPanel(now, name);
+    if (!step || judged.current.has(step.index) || armed.current) return;
+    const value = gradeAt(now, step);
+    if (!responseOnGrade(value)) {
+      judged.current.add(step.index);
+      missAudience(step);
+      setGrade({ index: step.index, value, point: value === "late" ? null : point });
+      return;
+    }
+    armed.current = { index: step.index, press: value, point };
+    setHolding(true);
+    setGrade({ index: step.index, value, point, part: "press" });
+  }, []);
+
+  const onHoldEnd = useCallback(() => {
+    const current = armed.current;
+    if (!current) return;
+    armed.current = null;
+    setHolding(false);
+    const step = steps[current.index];
+    if (!step || judged.current.has(step.index)) return;
+    judged.current.add(step.index);
+    const released = gradeAt(songTime(), { perfect: step.releaseAt, lead: step.releaseLead });
+    setGrade({
+      index: step.index,
+      value: released,
+      point: released === "late" ? null : current.point,
+      part: "release",
+    });
+  }, []);
+
   useEffect(() => {
     if (status !== "playing") return undefined;
     for (const cue of steps) {
       if (!cue.prompt || judged.current.has(cue.index)) continue;
+      if (cue.hold && armed.current?.index === cue.index) {
+        if (time > releaseClose(cue)) {
+          judged.current.add(cue.index);
+          armed.current = null;
+          setHolding(false);
+          setGrade((current) =>
+            current && current.index > cue.index ? current : { index: cue.index, value: "late", part: "release" },
+          );
+        }
+        continue;
+      }
       if (time > promptClose(cue)) {
         judged.current.add(cue.index);
         if (songRef.current === "kaszebe") misses.current.add(cue.index);
@@ -153,6 +206,8 @@ export default function App() {
     recallPlayed.current.clear();
     misses.current.clear();
     audienceLoud.current = true;
+    armed.current = null;
+    setHolding(false);
     setGrade(null);
     return undefined;
   }, [status]);
@@ -377,6 +432,9 @@ export default function App() {
           onFitZoom={onFitZoom}
           onHoverPanel={setHoveredPanel}
           onClickPanel={onClickPanel}
+          onHoldStart={onHoldStart}
+          onHoldEnd={onHoldEnd}
+          holding={holding}
           showCues={showCues}
         />
         {countdown ? (

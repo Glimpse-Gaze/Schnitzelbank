@@ -13,7 +13,7 @@ const SONGS = {
   kaszebe: {
     music: "/audio/Kaszebe_Music.wav",
     caller: "/audio/Kaszebe_Caller.wav",
-    audience: "/audio/Kaszebe_Audience.wav",
+    audience: "/audio/Kaszebe_Audience2.wav",
     bed: true,
   },
 };
@@ -157,11 +157,11 @@ export default function useSong(song) {
     Promise.all([
       loadStem(spec.music, engine.context, false),
       loadStem(spec.caller, engine.context, true),
-      loadStem(spec.audience, engine.context, false),
+      loadStem(spec.audience, engine.context, Boolean(spec.bed)),
     ])
       .then(([music, caller, audience]) => {
         if (cancelled) return;
-        if (spec.bed) installKaszebe(caller.markers, music.audio.duration);
+        if (spec.bed) installKaszebe(audience.markers, music.audio.duration);
         else installSequence(caller.markers, music.audio.duration);
         engine.buffers = {
           music: music.audio,
