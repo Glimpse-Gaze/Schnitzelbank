@@ -49,9 +49,11 @@ export function readMarkers(buffer) {
     const start = block[1].match(/<xmpDM:startTime>(\d+)<\/xmpDM:startTime>/);
     if (!start) continue;
     const name = block[1].match(/<xmpDM:name>([^<]*)<\/xmpDM:name>/);
+    const duration = block[1].match(/<xmpDM:duration>(\d+)<\/xmpDM:duration>/);
     markers.push({
       sample: Number(start[1]),
       time: Number(start[1]) / rate,
+      duration: duration ? Number(duration[1]) / rate : 0,
       name: name?.[1]?.trim() ?? "",
     });
   }

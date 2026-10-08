@@ -1,16 +1,27 @@
 import { useEffect, useState } from "react";
 import { readMarkers } from "./markers.js";
 import { installSequence, songLength } from "../data/sequence.js";
+import { installKaszebe } from "../data/kaszebeSequence.js";
 
-const STEMS = {
-  music: "/audio/Schnitzelbank_Music.wav",
-  caller: "/audio/Schnitzelbank_Caller.wav",
-  audience: "/audio/Schnitzelbank_Audience.wav",
+const SONGS = {
+  schnitzel: {
+    music: "/audio/Schnitzelbank_Music.wav",
+    caller: "/audio/Schnitzelbank_Caller.wav",
+    audience: "/audio/Schnitzelbank_Audience.wav",
+    bed: false,
+  },
+  kaszebe: {
+    music: "/audio/Kaszebe_Music.wav",
+    caller: "/audio/Kaszebe_Caller.wav",
+    audience: "/audio/Kaszebe_Audience.wav",
+    bed: true,
+  },
 };
 
 const engine = {
   context: null,
   master: null,
+  audienceGain: null,
   buffers: null,
   sources: [],
   responses: [],
@@ -18,6 +29,7 @@ const engine = {
   startedAt: 0,
   status: "stopped",
   ready: false,
+  bed: false,
 };
 
 let sharedVolume = 1;
@@ -43,10 +55,10 @@ function stopList(list) {
   list.length = 0;
 }
 
-function startStem(buffer, when, offset) {
+function startStem(buffer, when, offset, destination) {
   const source = engine.context.createBufferSource();
   source.buffer = buffer;
-  source.connect(engine.master);
+  source.connect(destination || engine.master);
   source.start(when, Math.max(0, offset));
   engine.sources.push(source);
 }
@@ -59,10 +71,26 @@ function begin(position) {
   engine.startedAt = when;
   startStem(engine.buffers.music, when, position);
   startStem(engine.buffers.caller, when, position);
+  if (!engine.bed || !engine.buffers.audience) return;
+  if (position === 0 && engine.audienceGain) {
+    engine.audienceGain.gain.cancelScheduledValues(when);
+    engine.audienceGain.gain.setValueAtTime(1, when);
+  }
+  startStem(engine.buffers.audience, when, position, engine.audienceGain);
+}
+
+export function setAudienceLoud(loud, fade = 0.07) {
+  if (!engine.bed || !engine.audienceGain || !engine.context) return;
+  const now = engine.context.currentTime;
+  const gain = engine.audienceGain.gain;
+  const current = gain.value;
+  gain.cancelScheduledValues(now);
+  gain.setValueAtTime(current, now);
+  gain.linearRampToValueAtTime(loud ? 1 : 0, now + fade);
 }
 
 export function playResponse(step, elapsed = 0) {
-  if (!step?.response || engine.status !== "playing" || !engine.buffers?.audience) return;
+  if (engine.bed || !step?.response || engine.status !== "playing" || !engine.buffers?.audience) return;
   const duration = step.response.duration - elapsed;
   if (duration <= 0.05) return;
   const source = engine.context.createBufferSource();
@@ -76,16 +104,16 @@ export function playResponse(step, elapsed = 0) {
   };
 }
 
-async function loadStem(url, context) {
+async function loadStem(url, context, withMarkers) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(url);
   const bytes = await response.arrayBuffer();
-  const markers = url === STEMS.caller ? readMarkers(bytes) : null;
+  const markers = withMarkers ? readMarkers(bytes) : null;
   const audio = await context.decodeAudioData(bytes.slice(0));
   return { audio, markers };
 }
 
-export default function useSong() {
+export default function useSong(song) {
   const [status, setStatus] = useState("stopped");
   const [time, setTime] = useState(0);
   const [countdown, setCountdown] = useState(null);
@@ -98,17 +126,43 @@ export default function useSong() {
     const master = context.createGain();
     master.gain.value = sharedVolume;
     master.connect(context.destination);
+    const audienceGain = context.createGain();
+    audienceGain.gain.value = 1;
+    audienceGain.connect(master);
     engine.context = context;
     engine.master = master;
+    engine.audienceGain = audienceGain;
+    return () => {
+      stopList(engine.sources);
+      stopList(engine.responses);
+      engine.ready = false;
+      engine.buffers = null;
+      context.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    const spec = song ? SONGS[song] : null;
     let cancelled = false;
+    engine.ready = false;
+    engine.bed = Boolean(spec?.bed);
+    setReady(false);
+    stopList(engine.sources);
+    stopList(engine.responses);
+    if (!spec || !engine.context) {
+      engine.buffers = null;
+      return undefined;
+    }
+    setError("");
     Promise.all([
-      loadStem(STEMS.music, context),
-      loadStem(STEMS.caller, context),
-      loadStem(STEMS.audience, context),
+      loadStem(spec.music, engine.context, false),
+      loadStem(spec.caller, engine.context, true),
+      loadStem(spec.audience, engine.context, false),
     ])
       .then(([music, caller, audience]) => {
         if (cancelled) return;
-        installSequence(caller.markers, music.audio.duration);
+        if (spec.bed) installKaszebe(caller.markers, music.audio.duration);
+        else installSequence(caller.markers, music.audio.duration);
         engine.buffers = {
           music: music.audio,
           caller: caller.audio,
@@ -122,13 +176,8 @@ export default function useSong() {
       });
     return () => {
       cancelled = true;
-      stopList(engine.sources);
-      stopList(engine.responses);
-      engine.ready = false;
-      engine.buffers = null;
-      context.close();
     };
-  }, []);
+  }, [song]);
 
   useEffect(() => {
     if (status !== "playing") return undefined;

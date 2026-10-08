@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { frameAt, steps } from "../data/sequence.js";
 import { songTime } from "../audio/useSong.js";
 import { layoutCouplets } from "./couplets.js";
+import { layoutKaszebe } from "./kaszebe.js";
 
 const CANVAS_PAD = 160;
 const GRADE_LABEL = {
@@ -28,8 +29,26 @@ function posterBoard(couplets) {
   };
 }
 
+function kaszebeBoard(cards) {
+  const layout = layoutKaszebe(cards.wide, cards.square);
+  return {
+    viewBox: `${-CANVAS_PAD} ${-CANVAS_PAD} ${layout.width + CANVAS_PAD * 2} ${layout.height + CANVAS_PAD * 2}`,
+    width: layout.width + CANVAS_PAD * 2,
+    height: layout.height + CANVAS_PAD * 2,
+    originX: -CANVAS_PAD,
+    originY: -CANVAS_PAD,
+    imageWidth: layout.width,
+    imageHeight: layout.height,
+    layers: layout.layers,
+    panels: layout.panels,
+    notes: [],
+  };
+}
+
 export default function Board({
+  song = "schnitzel",
   couplets,
+  cards,
   status,
   hoveredPanel,
   clickedPanel,
@@ -41,8 +60,12 @@ export default function Board({
   onHoverPanel,
   onClickPanel,
   showCues = true,
+  preview = false,
 }) {
-  const board = useMemo(() => posterBoard(couplets), [couplets]);
+  const board = useMemo(
+    () => (song === "kaszebe" ? kaszebeBoard(cards) : posterBoard(couplets)),
+    [song, couplets, cards],
+  );
   const [frame, setFrame] = useState(null);
 
   useEffect(() => {
@@ -63,12 +86,12 @@ export default function Board({
   }, [status]);
 
   useEffect(() => {
-    if (!board) return undefined;
+    if (!board || preview) return undefined;
     document.documentElement.style.setProperty("--board-w", String(board.width));
     document.documentElement.style.setProperty("--board-h", String(board.height));
     onFitZoom(board.height / board.imageHeight);
     return undefined;
-  }, [board, onFitZoom]);
+  }, [board, onFitZoom, preview]);
 
   const fitZoom = board.height / board.imageHeight;
   const scale = zoom ?? fitZoom;
@@ -93,7 +116,7 @@ export default function Board({
         transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
       }}
     >
-      <svg viewBox={board.viewBox} role="img" aria-label="Schnitzelbank board">
+      <svg viewBox={board.viewBox} role="img" aria-label={song === "kaszebe" ? "Kaszëbsczé nótë board" : "Schnitzelbank board"}>
         <rect
           x="0"
           y="0"
@@ -176,7 +199,7 @@ export default function Board({
           top={gradeTop}
         />
       ) : null}
-      {prost ? (
+      {prost && notes.length ? (
         <GradeToast
           grade={{ index: prost.id, value: "perfect", point: prost.point }}
           panel={notes[notes.length - 1]}

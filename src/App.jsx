@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Board from "./board/Board.jsx";
 import { COUPLETS, NOTE_COUNT, shuffleCouplets } from "./board/couplets.js";
+import { linearKaszebe, shuffleKaszebe } from "./board/kaszebe.js";
 import Lyrics from "./ui/Lyrics.jsx";
 import { CanvasTools, Playback } from "./ui/Transport.jsx";
-import useSong, { playResponse, songTime } from "./audio/useSong.js";
+import useSong, { playResponse, setAudienceLoud, songTime } from "./audio/useSong.js";
 import { gradeAt, promptClose, promptForPanel, responseOnGrade, steps } from "./data/sequence.js";
 import { bindZoom } from "./scene/zoomBus.js";
 
+function audienceFade(step) {
+  const span = step.span || step.lead * 2;
+  return Math.min(0.09, Math.max(0.03, span * 0.1));
+}
+
 export default function App() {
-  const { status, time, countdown, error, volume, setVolume, play, pause, stop } = useSong();
+  const [song, setSong] = useState(null);
+  const songRef = useRef(null);
+  songRef.current = song;
+  const { status, time, countdown, error, volume, setVolume, play, pause, stop } = useSong(song);
   const [hoveredPanel, setHoveredPanel] = useState(null);
   const [clickedPanel, setClickedPanel] = useState(null);
   const [grade, setGrade] = useState(null);
@@ -24,10 +33,15 @@ export default function App() {
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(null);
   const [panning, setPanning] = useState(false);
-  const [couplets, setCouplets] = useState(() => shuffleCouplets(COUPLETS));
-  const [mode, setMode] = useState("shuffled");
+  const [orders, setOrders] = useState(() => ({
+    schnitzel: { mode: "shuffled", couplets: shuffleCouplets(COUPLETS) },
+    kaszebe: { mode: "shuffled", ...shuffleKaszebe() },
+  }));
   const [showCues, setShowCues] = useState(true);
   const recallPlayed = useRef(new Set());
+  const misses = useRef(new Set());
+  const audienceLoud = useRef(true);
+  const mode = song ? orders[song].mode : "shuffled";
   const statusRef = useRef(status);
   statusRef.current = status;
 
@@ -53,7 +67,18 @@ export default function App() {
     if (!prompt || judged.current.has(prompt.index)) return;
     judged.current.add(prompt.index);
     const value = gradeAt(now, prompt);
-    if (responseOnGrade(value) && !prompt.dexterity) playResponse(prompt);
+    if (songRef.current === "kaszebe") {
+      if (!responseOnGrade(value)) {
+        misses.current.add(prompt.index);
+        audienceLoud.current = false;
+        setAudienceLoud(false, audienceFade(prompt));
+      } else if (!audienceLoud.current) {
+        audienceLoud.current = true;
+        setAudienceLoud(true, audienceFade(prompt));
+      }
+    } else if (responseOnGrade(value) && !prompt.dexterity) {
+      playResponse(prompt);
+    }
     setGrade({ index: prompt.index, value, point: value === "late" ? null : point });
   }, []);
 
@@ -63,6 +88,7 @@ export default function App() {
       if (!cue.prompt || judged.current.has(cue.index)) continue;
       if (time > promptClose(cue)) {
         judged.current.add(cue.index);
+        if (songRef.current === "kaszebe") misses.current.add(cue.index);
         setGrade((current) =>
           current && current.index > cue.index ? current : { index: cue.index, value: "late" },
         );
@@ -86,6 +112,29 @@ export default function App() {
   }, [status, time]);
 
   useEffect(() => {
+    if (song !== "kaszebe" || status !== "playing") return undefined;
+    const prompts = steps.filter((step) => step.prompt);
+    let plan = { loud: true, fade: 0.08 };
+    for (let index = 0; index < prompts.length; index += 1) {
+      const step = prompts[index];
+      const next = prompts[index + 1];
+      const regionEnd = next ? next.open : promptClose(step);
+      if (time < step.open) break;
+      if (time >= step.open && time < regionEnd) {
+        plan = {
+          loud: !misses.current.has(step.index),
+          fade: audienceFade(step),
+        };
+        break;
+      }
+    }
+    if (plan.loud === audienceLoud.current) return undefined;
+    audienceLoud.current = plan.loud;
+    setAudienceLoud(plan.loud, plan.fade);
+    return undefined;
+  }, [song, status, time]);
+
+  useEffect(() => {
     if (!grade) return undefined;
     const life = grade.value === "late" ? 1400 : 950;
     const id = window.setTimeout(() => setGrade(null), life);
@@ -102,6 +151,8 @@ export default function App() {
     if (status === "playing" || status === "paused") return undefined;
     judged.current.clear();
     recallPlayed.current.clear();
+    misses.current.clear();
+    audienceLoud.current = true;
     setGrade(null);
     return undefined;
   }, [status]);
@@ -135,12 +186,12 @@ export default function App() {
     };
     stage.addEventListener("wheel", onWheel, { passive: false });
     return () => stage.removeEventListener("wheel", onWheel);
-  }, [setZoomClamped]);
+  }, [setZoomClamped, song]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.code !== "Space") return;
+      if (event.code !== "Space" || !songRef.current) return;
       event.preventDefault();
       if (status === "playing") pause();
       else play();
@@ -187,21 +238,115 @@ export default function App() {
     setPanning(false);
   };
 
+  const resetView = () => {
+    pan.current = { x: 0, y: 0 };
+    setPanOffset({ x: 0, y: 0 });
+    zoomRef.current = null;
+    setZoom(null);
+  };
+
+  const openSong = (next) => {
+    resetView();
+    setSong(next);
+  };
+
   const onShuffle = () => {
-    if (mode === "linear") return;
-    setCouplets((current) => {
-      const next = shuffleCouplets(current);
-      const same = next.every((item, index) => item.src === current[index].src);
-      return same ? [...next.slice(1), next[0]] : next;
+    if (!song || mode === "linear") return;
+    setOrders((current) => {
+      if (song === "schnitzel") {
+        const list = current.schnitzel.couplets;
+        const next = shuffleCouplets(list);
+        const same = next.every((item, index) => item.src === list[index].src);
+        const couplets = same ? [...next.slice(1), next[0]] : next;
+        return { ...current, schnitzel: { ...current.schnitzel, couplets } };
+      }
+      return { ...current, kaszebe: { ...current.kaszebe, ...shuffleKaszebe(current.kaszebe) } };
     });
   };
 
   const onMode = (next) => {
-    if (next === mode) return;
-    setMode(next);
-    setCouplets(next === "linear" ? [...COUPLETS] : shuffleCouplets(COUPLETS));
+    if (!song || next === mode) return;
+    setOrders((current) => {
+      if (song === "schnitzel") {
+        return {
+          ...current,
+          schnitzel: {
+            mode: next,
+            couplets: next === "linear" ? [...COUPLETS] : shuffleCouplets(COUPLETS),
+          },
+        };
+      }
+      return {
+        ...current,
+        kaszebe: {
+          mode: next,
+          ...(next === "linear" ? linearKaszebe() : shuffleKaszebe()),
+        },
+      };
+    });
     stop();
   };
+
+  const onSwap = () => {
+    if (!song) return;
+    stop();
+    setProst(null);
+    noteStep.current = 0;
+    openSong(song === "schnitzel" ? "kaszebe" : "schnitzel");
+  };
+
+  if (!song) {
+    return (
+      <div id="app">
+        <div className="picker">
+          <button type="button" className="picker-card" onClick={() => openSong("schnitzel")}>
+            <h1>Schnitzelbank</h1>
+            <div className="picker-preview">
+              <Board
+                song="schnitzel"
+                couplets={orders.schnitzel.couplets}
+                cards={orders.kaszebe}
+                status="stopped"
+                hoveredPanel={null}
+                clickedPanel={null}
+                grade={null}
+                prost={null}
+                pan={panOffset}
+                zoom={null}
+                onFitZoom={() => {}}
+                onHoverPanel={() => {}}
+                onClickPanel={() => {}}
+                showCues={false}
+                preview
+              />
+            </div>
+          </button>
+          <button type="button" className="picker-card" onClick={() => openSong("kaszebe")}>
+            <h1>Kaszëbsczé nótë</h1>
+            <div className="picker-preview">
+              <Board
+                song="kaszebe"
+                couplets={orders.schnitzel.couplets}
+                cards={orders.kaszebe}
+                status="stopped"
+                hoveredPanel={null}
+                clickedPanel={null}
+                grade={null}
+                prost={null}
+                pan={{ x: 0, y: 0 }}
+                zoom={null}
+                onFitZoom={() => {}}
+                onHoverPanel={() => {}}
+                onClickPanel={() => {}}
+                showCues={false}
+                preview
+              />
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div id="app">
@@ -219,7 +364,9 @@ export default function App() {
         onContextMenu={(event) => event.preventDefault()}
       >
         <Board
-          couplets={couplets}
+          song={song}
+          couplets={orders.schnitzel.couplets}
+          cards={orders.kaszebe}
           status={status}
           hoveredPanel={hoveredPanel}
           clickedPanel={clickedPanel}
@@ -258,6 +405,8 @@ export default function App() {
           onToggleCues={() => setShowCues((current) => !current)}
           mode={mode}
           onMode={onMode}
+          onSwap={onSwap}
+          swapDetail={song === "schnitzel" ? "Open Kaszëbsczé nótë." : "Open Schnitzelbank."}
           onOpenSettings={() => {
             if (status === "playing" || status === "counting") pause();
           }}

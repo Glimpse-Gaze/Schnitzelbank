@@ -117,6 +117,10 @@ export function installSequence(markers, duration) {
       response: { start: answer.time, duration: (boundary?.time ?? duration) - answer.time },
     });
   }
+  installCues(cues, duration);
+}
+
+export function installCues(cues, duration) {
   steps.splice(0, steps.length, ...cues.map(prepare));
   sequenceDuration = duration;
 }
@@ -143,7 +147,7 @@ export function stepAt(time) {
 }
 
 export function promptClose(step) {
-  return step.perfect + step.lead * LATE_RATIO;
+  return step.perfect + step.lead * (step.lateRatio ?? LATE_RATIO);
 }
 
 export function openPrompts(time) {
@@ -173,7 +177,8 @@ export function frameAt(time) {
   const elapsed = Math.max(0, time - step.open);
   const arrived = step.lead > 0 ? cueTravel(elapsed / step.lead) : 1;
   const late = Math.max(0, time - step.perfect);
-  const opacity = late === 0 ? 1 : Math.max(0, 1 - late / (step.lead * LATE_RATIO));
+  const lateSpan = step.lead * (step.lateRatio ?? LATE_RATIO);
+  const opacity = late === 0 || lateSpan <= 0 ? 1 : Math.max(0, 1 - late / lateSpan);
   return {
     panel: step.panel,
     index: step.index,

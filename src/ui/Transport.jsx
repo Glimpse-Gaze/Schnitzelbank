@@ -120,6 +120,8 @@ export function CanvasTools({
   mode,
   onMode,
   onOpenSettings,
+  onSwap,
+  swapDetail,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -190,6 +192,15 @@ export function CanvasTools({
                     <small>{item.detail}</small>
                   </button>
                 ))}
+                {onSwap ? (
+                  <button type="button" className="mode-option swap-option" onClick={onSwap}>
+                    <span>
+                      <img src="/Swap.png" alt="" />
+                      Swap
+                    </span>
+                    <small>{swapDetail}</small>
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>
