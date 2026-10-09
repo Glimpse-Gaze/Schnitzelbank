@@ -217,6 +217,7 @@ function paintFrame(step, time) {
     index: step.index,
     scale: 1 + (1 - arrived) * 0.55,
     opacity,
+    arrived,
   };
 }
 

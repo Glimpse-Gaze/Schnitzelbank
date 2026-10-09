@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { framesAt, holdAt, steps } from "../data/sequence.js";
 import { songTime } from "../audio/useSong.js";
 import { layoutCouplets } from "./couplets.js";
 import { layoutKaszebe } from "./kaszebe.js";
+import { ApproachFrame, FolkHoldBar, PanelChrome } from "./kaszebeChrome.jsx";
 
 const CANVAS_PAD = 160;
 const GRADE_LABEL = {
@@ -71,6 +72,23 @@ export default function Board({
   );
   const [frames, setFrames] = useState([]);
   const [hold, setHold] = useState(null);
+  const [heldBar, setHeldBar] = useState(null);
+  const [barShown, setBarShown] = useState(false);
+  const holdRef = useRef(null);
+  if (hold) holdRef.current = hold;
+  const holdActive = Boolean(showCues && hold);
+
+  useEffect(() => {
+    if (holdActive) {
+      setHeldBar(holdRef.current);
+      setBarShown(false);
+      const frame = requestAnimationFrame(() => setBarShown(true));
+      return () => cancelAnimationFrame(frame);
+    }
+    setBarShown(false);
+    const timer = window.setTimeout(() => setHeldBar(null), 200);
+    return () => window.clearTimeout(timer);
+  }, [holdActive]);
 
   useEffect(() => {
     if (status !== "playing") return undefined;
@@ -102,6 +120,7 @@ export default function Board({
 
   const fitZoom = board.height / board.imageHeight;
   const scale = zoom ?? fitZoom;
+  const chromeId = useId().replace(/:/g, "");
 
   const panels = board.panels;
   const notes = board.notes;
@@ -116,6 +135,10 @@ export default function Board({
   const gradeTop = gradedPanel
     ? gradedPanel.y + gradedPanel.height / 2 - (gradedPanel.height * gradeScale) / 2
     : 0;
+  const barModel = holdActive ? hold : heldBar;
+  const barPanels = barModel
+    ? barModel.panels.map((id) => panels.find((panel) => panel.id === id)).filter(Boolean)
+    : [];
 
   return (
     <div
@@ -158,16 +181,22 @@ export default function Board({
           </mask>
         ) : null}
         {showCues
-          ? visibleFrames.map(({ frame, panel }) => (
-              <Frame key={frame.index} panel={panel} scale={frame.scale} opacity={frame.opacity} />
-            ))
+          ? visibleFrames.map(({ frame, panel }) =>
+              song === "kaszebe" ? (
+                <ApproachFrame
+                  key={frame.index}
+                  chromeId={chromeId}
+                  frameIndex={frame.index}
+                  panel={panel}
+                  scale={frame.scale}
+                  opacity={frame.opacity}
+                  arrived={frame.arrived ?? 1}
+                />
+              ) : (
+                <Frame key={frame.index} panel={panel} scale={frame.scale} opacity={frame.opacity} />
+              ),
+            )
           : null}
-        {showCues && hold ? (
-          <HoldBar
-            bounds={unionOf(hold.panels.map((id) => panels.find((panel) => panel.id === id)).filter(Boolean))}
-            progress={holding ? hold.progress : 0}
-          />
-        ) : null}
         {clickedNote && noteLayer ? (
           <rect
             x={clickedNote.x}
@@ -182,7 +211,7 @@ export default function Board({
         {notes.map((note) => (
           <rect
             key={note.id}
-            className="note-hit"
+            className="note-hit hit-target"
             x={note.x}
             y={note.y}
             width={note.width}
@@ -192,31 +221,48 @@ export default function Board({
             onClick={(event) => onClickPanel(note.id, clickPoint(event, note))}
           />
         ))}
-        {panels.map((panel) => (
-          <rect
-            key={panel.id}
-            x={panel.x}
-            y={panel.y}
-            width={panel.width}
-            height={panel.height}
-            fill={clickedPanel === panel.id ? "rgba(255, 75, 0, 0.34)" : "transparent"}
-            stroke={hoveredPanel === panel.id ? "#ff4b00" : "transparent"}
-            strokeWidth="3"
-            vectorEffect="non-scaling-stroke"
-            onPointerEnter={() => onHoverPanel(panel.id)}
-            onPointerLeave={() => onHoverPanel(null)}
-            onPointerDown={(event) => {
-              if (event.button !== 0 || !onHoldStart) return;
-              event.currentTarget.setPointerCapture(event.pointerId);
-              onHoldStart(panel.id, clickPoint(event, panel));
-            }}
-            onPointerUp={(event) => {
-              if (event.button !== 0 || !onHoldEnd) return;
-              onHoldEnd();
-            }}
-            onClick={(event) => onClickPanel(panel.id, clickPoint(event, panel))}
-          />
-        ))}
+        {panels.map((panel) =>
+          song === "kaszebe" ? (
+            <g key={panel.id} className="kaszebe-target">
+              <rect
+                className="kaszebe-hover"
+                x={panel.x}
+                y={panel.y}
+                width={panel.width}
+                height={panel.height}
+                fill="none"
+                stroke="#9fd0ee"
+                strokeWidth="15"
+                strokeDasharray="5 12"
+                strokeLinecap="round"
+                pointerEvents="none"
+              />
+              <PanelChrome panel={panel} />
+              <PanelHit
+                panel={panel}
+                pressed={clickedPanel === panel.id}
+                folk
+                onPointerEnter={onHoverPanel}
+                onPointerLeave={() => onHoverPanel(null)}
+                onHoldStart={onHoldStart}
+                onHoldEnd={onHoldEnd}
+                onClickPanel={onClickPanel}
+              />
+            </g>
+          ) : (
+            <PanelHit
+              key={panel.id}
+              panel={panel}
+              pressed={clickedPanel === panel.id}
+              hovered={hoveredPanel === panel.id}
+              onPointerEnter={onHoverPanel}
+              onPointerLeave={() => onHoverPanel(null)}
+              onHoldStart={onHoldStart}
+              onHoldEnd={onHoldEnd}
+              onClickPanel={onClickPanel}
+            />
+          ),
+        )}
       </svg>
       {gradedPanel ? (
         <GradeToast
@@ -234,6 +280,24 @@ export default function Board({
           top={0}
           label="Prost!"
         />
+      ) : null}
+      {barPanels.length ? (
+        <div className={barShown ? "board-hold is-on" : "board-hold"}>
+          <svg viewBox={board.viewBox} aria-hidden="true">
+            {song === "kaszebe" ? (
+              <FolkHoldBar
+                chromeId={chromeId}
+                bounds={unionOf(barPanels)}
+                progress={holding && hold ? hold.progress : 0}
+              />
+            ) : (
+              <HoldBar
+                bounds={unionOf(barPanels)}
+                progress={holding && hold ? hold.progress : 0}
+              />
+            )}
+          </svg>
+        </div>
       ) : null}
     </div>
   );
@@ -299,6 +363,34 @@ function unionOf(panels) {
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
+function PanelHit({ panel, pressed, hovered = false, folk = false, onPointerEnter, onPointerLeave, onHoldStart, onHoldEnd, onClickPanel }) {
+  return (
+    <rect
+      className="hit-target"
+      x={panel.x}
+      y={panel.y}
+      width={panel.width}
+      height={panel.height}
+      fill={pressed ? (folk ? "rgba(31, 95, 173, 0.2)" : "rgba(255, 75, 0, 0.34)") : "transparent"}
+      stroke={!folk && hovered ? "#ff4b00" : "transparent"}
+      strokeWidth="3"
+      vectorEffect="non-scaling-stroke"
+      onPointerEnter={() => onPointerEnter(panel.id)}
+      onPointerLeave={onPointerLeave}
+      onPointerDown={(event) => {
+        if (event.button !== 0 || !onHoldStart) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onHoldStart(panel.id, clickPoint(event, panel));
+      }}
+      onPointerUp={(event) => {
+        if (event.button !== 0 || !onHoldEnd) return;
+        onHoldEnd();
+      }}
+      onClick={(event) => onClickPanel(panel.id, clickPoint(event, panel))}
+    />
+  );
+}
+
 function HoldBar({ bounds, progress }) {
   if (!bounds || !Number.isFinite(bounds.width)) return null;
   const y = bounds.y + Math.min(36, bounds.height * 0.22);
@@ -334,6 +426,7 @@ function Frame({ panel, scale, opacity }) {
       strokeWidth="3"
       vectorEffect="non-scaling-stroke"
       opacity={opacity}
+      pointerEvents="none"
     />
   );
 }

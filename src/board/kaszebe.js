@@ -35,10 +35,10 @@ export const WIDE_CARDS = [
     hit("R1P2.3", 390, 4, 255, 320),
   ], { left: 20, top: 6, right: 634, bottom: 304 }),
   card("R2P1", "Ridel-Widłe.png", 700, 450, [
-    hit("R2P1.1", 45, 4, 130, 312),
-    hit("R2P1.2", 180, 4, 130, 312),
-    hit("R2P1.3", 275, 8, 300, 302),
-    hit("R2P1.4", 575, 8, 115, 308),
+    hit("R2P1.1", 48, 8, 114, 292),
+    hit("R2P1.2", 188, 8, 82, 292),
+    hit("R2P1.3", 298, 8, 268, 292),
+    hit("R2P1.4", 586, 8, 82, 292),
   ], { left: 56, top: 6, right: 666, bottom: 304 }),
   card("R2P2", "Proste-koło.png", 700, 450, [
     hit("R2P2.1", 58, 12, 85, 290),
@@ -64,8 +64,7 @@ export const SQUARE_CARDS = [
     hit("R4P2", 48, 12, 340, 322),
   ], { left: 68, top: 24, right: 366, bottom: 304 }),
   card("R4P3", "Całe_pół.png", 450, 450, [
-    hit("R4P3.1", 10, 14, 255, 268),
-    hit("R4P3.2", 258, 18, 170, 262),
+    hit("R4P3", 10, 14, 418, 268),
   ], { left: 16, top: 30, right: 416, bottom: 304 }),
 ];
 
@@ -106,19 +105,34 @@ export function shuffleKaszebe(current) {
   return { wide, square };
 }
 
-function packRow(cards, staffY, scale, gap) {
-  const inkSum = cards.reduce((sum, item) => sum + (item.ink.right - item.ink.left), 0);
-  const gaps = gap * Math.max(0, cards.length - 1);
+function weightOf(item) {
+  if (item.id === "R4P1") return 0.9;
+  if (item.id === "R4P2") return 0.94;
+  return 1;
+}
+
+// Grow the row until the gaps are about `targetGap`, then share any remainder.
+// A cap keeps captions from meeting the next staff.
+function packRow(cards, staffY, targetGap) {
   const room = STAFF_RIGHT - CLEF;
-  const fitted = inkSum * scale + gaps > room ? (room - gaps) / inkSum : scale;
-  const fittedWidths = cards.map((item) => (item.ink.right - item.ink.left) * fitted);
+  const gaps = Math.max(0, cards.length - 1);
+  const ink = cards.map((item) => (item.ink.right - item.ink.left) * weightOf(item));
+  const sum = ink.reduce((total, width) => total + width, 0);
+  const maxFactor = 1.02;
+  const wanted = gaps ? (room - targetGap * gaps) / sum : 1;
+  const factor = Math.min(maxFactor, Math.max(0.75, wanted));
+  const scales = cards.map((item) => weightOf(item) * factor);
+  const widths = cards.map((item, index) => (item.ink.right - item.ink.left) * scales[index]);
+  const used = widths.reduce((total, width) => total + width, 0);
+  const gap = gaps ? (room - used) / gaps : 0;
   let cursor = CLEF;
   return cards.map((item, index) => {
-    const x = cursor - item.ink.left * fitted;
+    const scale = scales[index];
+    const x = cursor - item.ink.left * scale;
     const mid = (item.ink.top + item.ink.bottom) / 2;
-    const y = staffY - mid * fitted;
-    cursor += fittedWidths[index] + gap;
-    return { item, x, y, scale: fitted };
+    const y = staffY - mid * scale;
+    cursor += widths[index] + gap;
+    return { item, x, y, scale };
   });
 }
 
@@ -153,10 +167,10 @@ export function layoutKaszebe(wide, square) {
       });
     }
   };
-  packRow(wide.slice(0, 2), STAFF_Y[0], 0.9, 64).forEach(place);
-  packRow(wide.slice(2, 4), STAFF_Y[1], 0.9, 64).forEach(place);
-  packRow(square.slice(0, 3), STAFF_Y[2], 1, 36).forEach(place);
-  packRow(square.slice(3, 6), STAFF_Y[3], 1, 36).forEach(place);
+  packRow(wide.slice(0, 2), STAFF_Y[0], 100).forEach(place);
+  packRow(wide.slice(2, 4), STAFF_Y[1], 100).forEach(place);
+  packRow(square.slice(0, 3), STAFF_Y[2], 80).forEach(place);
+  packRow(square.slice(3, 6), STAFF_Y[3], 80).forEach(place);
   return {
     width: TEMPLATE.width,
     height: TEMPLATE.height,
