@@ -3,15 +3,13 @@ import { stepAt, steps } from "../data/sequence.js";
 export default function Lyrics({ status, time, error }) {
   const active = status === "playing" || status === "paused";
   const step = active ? stepAt(time) : null;
-  const phraseLabel = step ? `${step.index + 1} / ${steps.length}` : `${steps.length} phrases`;
   const answerStarted = step?.prompt && time >= step.perfect;
 
   return (
     <section className="lyrics" aria-live="polite">
-      <div className="lyrics__heading">
-        <p className="lyrics__kicker">Schnitzelbank</p>
-        <p className="lyrics__count">{phraseLabel}</p>
-      </div>
+      <p className="lyrics__count" aria-hidden={step ? undefined : true}>
+        {step ? `${step.index + 1} / ${steps.length}` : "\u00a0"}
+      </p>
       {error ? <p className="lyrics__error">{error}</p> : null}
       <div className="lyrics__block">
         {step ? (
@@ -24,19 +22,27 @@ export default function Lyrics({ status, time, error }) {
               : waiting
                 ? "lyrics__line is-waiting"
                 : "lyrics__line";
+            const label = line.repeat ? `${line.text} x${line.repeat}` : line.text;
             return (
-              <p key={`${line.text}-${index}`} className={className}>
+              <p key={`${line.text}-${index}`} className={className} style={{ "--chars": label.length }}>
                 {line.text}
-                {line.repeat ? <span className="lyrics__repeat">x2</span> : null}
+                {line.repeat ? <span className="lyrics__repeat">x{line.repeat}</span> : null}
               </p>
             );
           })
         ) : (
-          <p className="lyrics__idle">
-            {status === "counting"
-              ? "Get ready."
-              : "Play the song. Click the picture when the frame meets it."}
-          </p>
+          status === "counting" ? (
+            <p className="lyrics__line">Get ready.</p>
+          ) : (
+            <>
+              <p className="lyrics__line" style={{ "--chars": 33 }}>
+                Play the song. Click the picture
+              </p>
+              <p className="lyrics__line" style={{ "--chars": 33 }}>
+                when the frame meets it.
+              </p>
+            </>
+          )
         )}
       </div>
       <div className="lyrics__meter" aria-hidden="true">

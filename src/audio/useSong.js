@@ -1,65 +1,193 @@
-import { useEffect, useRef, useState } from "react";
-import { Howl } from "howler";
-import { sequenceDuration } from "../data/sequence.js";
+import { useEffect, useState } from "react";
+import { readMarkers } from "./markers.js";
+import { installSequence, songLength } from "../data/sequence.js";
+import { installKaszebe } from "../data/kaszebeSequence.js";
 
-const SONG_URL = "/audio/Schnitzelbank3.wav";
+const SONGS = {
+  schnitzel: {
+    music: "/audio/Schnitzelbank_Music.wav",
+    caller: "/audio/Schnitzelbank_Caller.wav",
+    audience: "/audio/Schnitzelbank_Audience.wav",
+    bed: false,
+  },
+  kaszebe: {
+    music: "/audio/Kaszebe_Music.wav",
+    caller: "/audio/Kaszebe_Caller.wav",
+    audience: "/audio/Kaszebe_Audience2.wav",
+    bed: true,
+  },
+};
 
-let sharedHowl = null;
-let sharedUrl = "";
+const engine = {
+  context: null,
+  master: null,
+  audienceGain: null,
+  buffers: null,
+  sources: [],
+  responses: [],
+  offset: 0,
+  startedAt: 0,
+  status: "stopped",
+  ready: false,
+  bed: false,
+};
+
 let sharedVolume = 1;
 
-function getHowl() {
-  if (sharedHowl && sharedUrl === SONG_URL) return sharedHowl;
-  sharedHowl?.unload();
-  sharedUrl = SONG_URL;
-  sharedHowl = new Howl({
-    src: [SONG_URL],
-    html5: true,
-    preload: true,
-    volume: sharedVolume,
-  });
-  return sharedHowl;
-}
-
-function readTime(howl) {
-  const value = howl.seek();
-  return typeof value === "number" ? value : 0;
+function songOffset() {
+  if (engine.status !== "playing" || !engine.context) return engine.offset;
+  return engine.offset + (engine.context.currentTime - engine.startedAt);
 }
 
 export function songTime() {
-  if (!sharedHowl) return 0;
-  return readTime(sharedHowl);
+  return songOffset();
 }
 
-export default function useSong() {
-  const howlRef = useRef(null);
+function stopList(list) {
+  for (const source of list) {
+    try {
+      source.onended = null;
+      source.stop();
+    } catch {
+      // The node has already finished.
+    }
+  }
+  list.length = 0;
+}
+
+function startStem(buffer, when, offset, destination) {
+  const source = engine.context.createBufferSource();
+  source.buffer = buffer;
+  source.connect(destination || engine.master);
+  source.start(when, Math.max(0, offset));
+  engine.sources.push(source);
+}
+
+function begin(position) {
+  stopList(engine.sources);
+  stopList(engine.responses);
+  const when = engine.context.currentTime;
+  engine.offset = position;
+  engine.startedAt = when;
+  startStem(engine.buffers.music, when, position);
+  startStem(engine.buffers.caller, when, position);
+  if (!engine.bed || !engine.buffers.audience) return;
+  if (position === 0 && engine.audienceGain) {
+    engine.audienceGain.gain.cancelScheduledValues(when);
+    engine.audienceGain.gain.setValueAtTime(1, when);
+  }
+  startStem(engine.buffers.audience, when, position, engine.audienceGain);
+}
+
+export function setAudienceLoud(loud, fade = 0.07) {
+  if (!engine.bed || !engine.audienceGain || !engine.context) return;
+  const now = engine.context.currentTime;
+  const gain = engine.audienceGain.gain;
+  const current = gain.value;
+  gain.cancelScheduledValues(now);
+  gain.setValueAtTime(current, now);
+  gain.linearRampToValueAtTime(loud ? 1 : 0, now + fade);
+}
+
+export function playResponse(step, elapsed = 0) {
+  if (engine.bed || !step?.response || engine.status !== "playing" || !engine.buffers?.audience) return;
+  const duration = step.response.duration - elapsed;
+  if (duration <= 0.05) return;
+  const source = engine.context.createBufferSource();
+  source.buffer = engine.buffers.audience;
+  source.connect(engine.master);
+  source.start(0, step.response.start + Math.max(0, elapsed), duration);
+  engine.responses.push(source);
+  source.onended = () => {
+    const index = engine.responses.indexOf(source);
+    if (index >= 0) engine.responses.splice(index, 1);
+  };
+}
+
+async function loadStem(url, context, withMarkers) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(url);
+  const bytes = await response.arrayBuffer();
+  const markers = withMarkers ? readMarkers(bytes) : null;
+  const audio = await context.decodeAudioData(bytes.slice(0));
+  return { audio, markers };
+}
+
+export default function useSong(song) {
   const [status, setStatus] = useState("stopped");
   const [time, setTime] = useState(0);
   const [countdown, setCountdown] = useState(null);
   const [error, setError] = useState("");
   const [volume, setVolumeState] = useState(sharedVolume);
+  const [, setReady] = useState(false);
 
   useEffect(() => {
-    const howl = getHowl();
-    howlRef.current = howl;
-    const onError = () => setError("The song file could not be played in this browser.");
-    howl.on("loaderror", onError);
-    howl.on("playerror", onError);
+    const context = new AudioContext();
+    const master = context.createGain();
+    master.gain.value = sharedVolume;
+    master.connect(context.destination);
+    const audienceGain = context.createGain();
+    audienceGain.gain.value = 1;
+    audienceGain.connect(master);
+    engine.context = context;
+    engine.master = master;
+    engine.audienceGain = audienceGain;
     return () => {
-      howl.off("loaderror", onError);
-      howl.off("playerror", onError);
-      howl.stop();
+      stopList(engine.sources);
+      stopList(engine.responses);
+      engine.ready = false;
+      engine.buffers = null;
+      context.close();
     };
-  }, [SONG_URL]);
+  }, []);
+
+  useEffect(() => {
+    const spec = song ? SONGS[song] : null;
+    let cancelled = false;
+    engine.ready = false;
+    engine.bed = Boolean(spec?.bed);
+    setReady(false);
+    stopList(engine.sources);
+    stopList(engine.responses);
+    if (!spec || !engine.context) {
+      engine.buffers = null;
+      return undefined;
+    }
+    setError("");
+    Promise.all([
+      loadStem(spec.music, engine.context, false),
+      loadStem(spec.caller, engine.context, true),
+      loadStem(spec.audience, engine.context, Boolean(spec.bed)),
+    ])
+      .then(([music, caller, audience]) => {
+        if (cancelled) return;
+        if (spec.bed) installKaszebe(audience.markers, music.audio.duration);
+        else installSequence(caller.markers, music.audio.duration);
+        engine.buffers = {
+          music: music.audio,
+          caller: caller.audio,
+          audience: audience.audio,
+        };
+        engine.ready = true;
+        setReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setError("The song files could not be played in this browser.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [song]);
 
   useEffect(() => {
     if (status !== "playing") return undefined;
     const tick = () => {
-      const howl = howlRef.current;
-      if (!howl) return;
-      const seconds = readTime(howl);
-      if (seconds >= sequenceDuration) {
-        howl.stop();
+      const seconds = songOffset();
+      if (seconds >= songLength()) {
+        stopList(engine.sources);
+        stopList(engine.responses);
+        engine.offset = 0;
+        engine.status = "stopped";
         setTime(0);
         setStatus("stopped");
         return;
@@ -67,8 +195,8 @@ export default function useSong() {
       setTime(seconds);
     };
     tick();
-    const id = setInterval(tick, 100);
-    return () => clearInterval(id);
+    const id = window.setInterval(tick, 100);
+    return () => window.clearInterval(id);
   }, [status]);
 
   useEffect(() => {
@@ -82,7 +210,8 @@ export default function useSong() {
       if (value <= 0) {
         window.clearInterval(id);
         setCountdown(null);
-        howlRef.current?.play();
+        begin(0);
+        engine.status = "playing";
         setStatus("playing");
         return;
       }
@@ -95,28 +224,35 @@ export default function useSong() {
   }, [status]);
 
   const play = () => {
-    const howl = howlRef.current;
-    if (!howl || status === "playing" || status === "counting") return;
+    if (!engine.ready || status === "playing" || status === "counting") return;
     setError("");
+    engine.context.resume();
     if (status === "paused") {
-      howl.play();
+      begin(engine.offset);
+      engine.status = "playing";
       setStatus("playing");
       return;
     }
+    engine.offset = 0;
     setCountdown(3);
+    engine.status = "counting";
     setStatus("counting");
   };
 
   const pause = () => {
-    const howl = howlRef.current;
-    if (!howl || status === "counting") {
+    if (status === "counting") {
       setCountdown(null);
+      engine.offset = 0;
+      engine.status = "stopped";
       setStatus("stopped");
       return;
     }
     if (status !== "playing") return;
-    howl.pause();
-    setTime(readTime(howl));
+    engine.offset = songOffset();
+    stopList(engine.sources);
+    stopList(engine.responses);
+    engine.status = "paused";
+    setTime(engine.offset);
     setStatus("paused");
   };
 
@@ -124,13 +260,14 @@ export default function useSong() {
     const next = Math.min(1, Math.max(0, Number(value)));
     sharedVolume = next;
     setVolumeState(next);
-    howlRef.current?.volume(next);
+    if (engine.master) engine.master.gain.value = next;
   };
 
   const stop = () => {
-    const howl = howlRef.current;
-    if (!howl) return;
-    howl.stop();
+    stopList(engine.sources);
+    stopList(engine.responses);
+    engine.offset = 0;
+    engine.status = "stopped";
     setCountdown(null);
     setTime(0);
     setStatus("stopped");
