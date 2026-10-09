@@ -147,7 +147,7 @@ export default function Board({
           />
         ))}
         {noteLayer ? (
-          <mask id="note-ink" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" maskType="alpha" style={{ maskType: "alpha" }}>
+          <mask id="note-ink" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" mask-type="alpha">
             <image
               href={noteLayer.src}
               x={noteLayer.x}

@@ -90,13 +90,57 @@ const APPROACH = 1.25;
 const GRADE_LEAD = 0.55;
 const LATE_WINDOW = 0.22;
 const SETTLE = 0.16;
-const KASZEBA_LATER = 0.2;
-const KASZEBA_END_EARLIER = 0.3;
-const STOLECA_END_EARLIER = 0.1;
-const KOLO_END_EARLIER = 0.12;
-const PROSTE_LATER = 0.12;
-const HOJNE_END_EARLIER = 0.2;
 const HOJNE_PANEL = pairTarget(["R2P1.3", "R2P1.4"]);
+
+// Median press and release from six linear plays with the guides hidden
+// (kaszebe-timing-2026-10-08-23-04-16). Two mistaken clicks in take 5 are
+// excluded. Each value is seconds after that phrase's Premiere marker.
+// Repeats are listed in the order they are sung, because the lag is not the same every time.
+const MEASURED = {
+  kaszeba: [
+    { press: 0.398, release: 0.183 },
+    { press: 0.302, release: 0.227 },
+    { press: 0.3, release: 0.205 },
+  ],
+  base: [{ press: 0.345 }, { press: 0.273 }, { press: 0.292 }],
+  skrzepce: [{ press: 0.267 }, { press: 0.242 }, { press: 0.278 }],
+  krotkie: [{ press: 0.209 }, { press: 0.187 }, { press: 0.255 }],
+  dludze: [{ press: 0.208 }, { press: 0.178 }, { press: 0.255 }],
+  stolica: [
+    { press: 0.309, release: 0.166 },
+    { press: 0.283, release: 0.182 },
+    { press: 0.242, release: 0.261 },
+  ],
+  tylnekolo: [
+    { press: 0.373, release: 0.285 },
+    { press: 0.272, release: 0.227 },
+  ],
+  proste: [{ press: 0.357 }, { press: 0.371 }],
+  krzywe: [{ press: 0.407 }, { press: 0.351 }],
+  hojne: [
+    { press: 0.269, release: 0.136 },
+    { press: 0.255, release: 0.197 },
+  ],
+  widle: [
+    { press: 0.225, release: 0.205 },
+    { press: 0.249, release: 0.212 },
+  ],
+  ridel: [{ press: 0.355 }, { press: 0.231 }],
+  tycz: [{ press: 0.277 }, { press: 0.225 }],
+  hoczi: [{ press: 0.257 }],
+  ptoczi: [{ press: 0.188 }],
+  poltorak: [{ press: 0.243, release: 0.134 }],
+};
+
+const measuredCursor = {};
+
+function takeMeasured(key) {
+  const index = measuredCursor[key] ?? 0;
+  measuredCursor[key] = index + 1;
+  const sample = MEASURED[key]?.[index];
+  if (!sample) throw new Error(`No measured timing for ${key} repetition ${index + 1}`);
+  return sample;
+}
 
 function isPhrase(marker) {
   return marker.name.startsWith("NA:") || marker.name.startsWith("RE:");
@@ -152,43 +196,57 @@ function addHojne(cues, marker, points, lyricEnd, lines, tone) {
   const widle = points.find((point) => pointKind(point) === "widle");
   if (!endHojne || !widle) throw new Error(`Hojne hold markers missing after ${marker.time}`);
   const areaEnd = marker.time + marker.duration;
+  const first = takeMeasured("hojne");
+  const second = takeMeasured("widle");
+  const firstRelease = endHojne.time + first.release;
+  const secondRelease = areaEnd + second.release;
   pushHold(cues, {
     panel: HOJNE_PANEL,
-    perfect: marker.time,
-    releaseAt: endHojne.time - HOJNE_END_EARLIER,
-    end: widle.time,
+    perfect: marker.time + first.press,
+    releaseAt: firstRelease,
+    end: widle.time + second.press,
     lines,
     tone,
-    span: endHojne.time - HOJNE_END_EARLIER - marker.time,
+    span: firstRelease - (marker.time + first.press),
   });
   pushHold(cues, {
     panel: HOJNE_PANEL,
-    perfect: widle.time,
-    releaseAt: areaEnd - HOJNE_END_EARLIER,
+    perfect: widle.time + second.press,
+    releaseAt: secondRelease,
     end: lyricEnd,
     lines,
     tone,
-    span: areaEnd - HOJNE_END_EARLIER - widle.time,
+    span: secondRelease - (widle.time + second.press),
   });
 }
 
 function addPair(cues, marker, points, panels, lyricEnd, lines, tone) {
   const second = points.find((point) => pointKind(point) === "second");
   if (!second) throw new Error(`Second click marker missing after ${marker.name} at ${marker.time}`);
-  const later = fold(marker.name) === "prostykrzywy" ? PROSTE_LATER : 0;
+  const names = {
+    prostykrzywy: ["proste", "krzywe"],
+    baseskrzepce: ["base", "skrzepce"],
+    krotkiedlugie: ["krotkie", "dludze"],
+    rydeltycz: ["ridel", "tycz"],
+  };
+  const [firstKey, secondKey] = names[fold(marker.name)];
+  const first = takeMeasured(firstKey);
+  const secondHit = takeMeasured(secondKey);
   const panel = pairTarget(panels);
   const areaEnd = marker.time + marker.duration;
+  const firstPerfect = marker.time + first.press;
+  const secondPerfect = second.time + secondHit.press;
   pushClick(cues, {
     panel,
-    perfect: marker.time + later,
-    end: second.time,
+    perfect: firstPerfect,
+    end: secondPerfect,
     lines,
     tone,
     span: second.time - marker.time,
   });
   pushClick(cues, {
     panel,
-    perfect: second.time + later,
+    perfect: secondPerfect,
     end: lyricEnd,
     lines,
     tone,
@@ -200,14 +258,10 @@ function addSingle(cues, marker, panels, lyricEnd, lines, tone) {
   const span = marker.duration;
   const key = fold(marker.name);
   const panel = panels[0];
-  let perfect = marker.time;
-  let releaseAt = marker.time + span;
-  if (key === "kaszeba") {
-    perfect += KASZEBA_LATER;
-    releaseAt += KASZEBA_LATER - KASZEBA_END_EARLIER;
-  }
-  if (key === "kaszebskostolica" || key === "kaszebksostolica") releaseAt -= STOLECA_END_EARLIER;
-  if (key === "tylnekolo") releaseAt -= KOLO_END_EARLIER;
+  const measuredKey = key === "kaszebskostolica" || key === "kaszebksostolica" ? "stolica" : key;
+  const sample = takeMeasured(measuredKey);
+  const perfect = marker.time + sample.press;
+  const releaseAt = marker.time + span + (sample.release ?? 0);
   if (span >= HOLD_SINGLE || key === "poltorak") {
     pushHold(cues, {
       panel,
@@ -231,6 +285,7 @@ function addSingle(cues, marker, panels, lyricEnd, lines, tone) {
 }
 
 export function installKaszebe(markers, duration) {
+  for (const key of Object.keys(measuredCursor)) delete measuredCursor[key];
   const cues = [];
   for (let index = 0; index < markers.length; index += 1) {
     const marker = markers[index];

@@ -122,6 +122,10 @@ export function CanvasTools({
   onOpenSettings,
   onSwap,
   swapDetail,
+  devTiming = false,
+  onDevTiming,
+  onDownloadTiming,
+  timingTakes = 0,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -199,6 +203,25 @@ export function CanvasTools({
                       Swap
                     </span>
                     <small>{swapDetail}</small>
+                  </button>
+                ) : null}
+                {onDevTiming ? (
+                  <label className="mode-option dev-timing">
+                    <span>
+                      <input
+                        type="checkbox"
+                        checked={devTiming}
+                        onChange={(event) => onDevTiming(event.target.checked)}
+                      />
+                      Developer timing
+                    </span>
+                    <small>Linear only. Guides stay hidden. Each click and hold is logged.</small>
+                  </label>
+                ) : null}
+                {devTiming && onDownloadTiming ? (
+                  <button type="button" className="mode-option" onClick={onDownloadTiming}>
+                    <span>Download timing log</span>
+                    <small>{timingTakes === 1 ? "1 take" : `${timingTakes} takes`}</small>
                   </button>
                 ) : null}
               </div>

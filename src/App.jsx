@@ -13,6 +13,16 @@ function audienceFade(step) {
   return Math.min(0.09, Math.max(0.03, span * 0.1));
 }
 
+function seconds(value) {
+  return Math.round(value * 1000) / 1000;
+}
+
+function panelLabel(panel) {
+  const step = steps.find((item) => item.panel === panel && item.lines?.length);
+  if (!step) return "";
+  return step.lines.map((line) => line.text).join(" ");
+}
+
 export default function App() {
   const [song, setSong] = useState(null);
   const songRef = useRef(null);
@@ -38,6 +48,13 @@ export default function App() {
     kaszebe: { mode: "linear", ...linearKaszebe() },
   }));
   const [showCues, setShowCues] = useState(true);
+  const [devTiming, setDevTiming] = useState(false);
+  const [timingTakes, setTimingTakes] = useState(0);
+  const devTimingRef = useRef(false);
+  const timingLog = useRef({ takes: [] });
+  const openTake = useRef(null);
+  const pendingTiming = useRef(null);
+  devTimingRef.current = devTiming;
   const recallPlayed = useRef(new Set());
   const misses = useRef(new Set());
   const audienceLoud = useRef(true);
@@ -63,7 +80,7 @@ export default function App() {
         noteStep.current = 0;
       }
     }
-    if (statusRef.current !== "playing") return;
+    if (statusRef.current !== "playing" || devTimingRef.current) return;
     const now = songTime();
     const prompt = promptForPanel(now, name);
     if (!prompt || prompt.hold || judged.current.has(prompt.index)) return;
@@ -91,6 +108,11 @@ export default function App() {
   };
 
   const onHoldStart = useCallback((name, point) => {
+    if (devTimingRef.current) {
+      if (statusRef.current !== "playing" || songRef.current !== "kaszebe") return;
+      pendingTiming.current = { panel: name, down: songTime() };
+      return;
+    }
     if (statusRef.current !== "playing" || songRef.current !== "kaszebe") return;
     const now = songTime();
     const step = holdForPanel(now, name);
@@ -108,6 +130,26 @@ export default function App() {
   }, []);
 
   const onHoldEnd = useCallback(() => {
+    if (devTimingRef.current) {
+      const pending = pendingTiming.current;
+      if (!pending) return;
+      pendingTiming.current = null;
+      const up = seconds(songTime());
+      const down = seconds(pending.down);
+      const event = {
+        panel: pending.panel,
+        label: panelLabel(pending.panel),
+        down,
+        up,
+        held: seconds(Math.max(0, up - down)),
+      };
+      if (!openTake.current) {
+        openTake.current = { take: timingLog.current.takes.length + 1, events: [] };
+      }
+      openTake.current.events.push(event);
+      console.log("[timing]", event);
+      return;
+    }
     const current = armed.current;
     if (!current) return;
     armed.current = null;
@@ -125,6 +167,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (devTimingRef.current) return undefined;
     if (status !== "playing") return undefined;
     for (const cue of steps) {
       if (!cue.prompt || judged.current.has(cue.index)) continue;
@@ -165,6 +208,7 @@ export default function App() {
   }, [status, time]);
 
   useEffect(() => {
+    if (devTiming) return undefined;
     if (song !== "kaszebe" || status !== "playing") return undefined;
     const prompts = steps.filter((step) => step.prompt);
     let plan = { loud: true, fade: 0.08 };
@@ -185,7 +229,36 @@ export default function App() {
     audienceLoud.current = plan.loud;
     setAudienceLoud(plan.loud, plan.fade);
     return undefined;
-  }, [song, status, time]);
+  }, [song, status, time, devTiming]);
+
+  useEffect(() => {
+    if (!devTiming || song !== "kaszebe") return undefined;
+    if (status === "playing" && !openTake.current) {
+      openTake.current = { take: timingLog.current.takes.length + 1, events: [] };
+      console.info(`[timing] take ${openTake.current.take} started`);
+    }
+    if (status === "stopped" && openTake.current) {
+      if (pendingTiming.current) {
+        const pending = pendingTiming.current;
+        pendingTiming.current = null;
+        openTake.current.events.push({
+          panel: pending.panel,
+          label: panelLabel(pending.panel),
+          down: seconds(pending.down),
+          up: null,
+          held: null,
+          note: "playback stopped while the button was still held",
+        });
+      }
+      if (openTake.current.events.length) {
+        timingLog.current.takes.push(openTake.current);
+        setTimingTakes(timingLog.current.takes.length);
+        console.log("[timing] take saved", openTake.current);
+      }
+      openTake.current = null;
+    }
+    return undefined;
+  }, [status, devTiming, song]);
 
   useEffect(() => {
     if (!grade) return undefined;
@@ -321,6 +394,7 @@ export default function App() {
 
   const onMode = (next) => {
     if (!song || next === mode) return;
+    if (devTimingRef.current && song === "kaszebe" && next !== "linear") return;
     setOrders((current) => {
       if (song === "schnitzel") {
         return {
@@ -435,7 +509,7 @@ export default function App() {
           onHoldStart={onHoldStart}
           onHoldEnd={onHoldEnd}
           holding={holding}
-          showCues={showCues}
+          showCues={showCues && !devTiming}
         />
         {countdown ? (
           <div className="countdown" aria-live="assertive">
@@ -465,6 +539,35 @@ export default function App() {
           onMode={onMode}
           onSwap={onSwap}
           swapDetail={song === "schnitzel" ? "Open Kaszëbsczé nótë." : "Open Schnitzelbank."}
+          devTiming={devTiming}
+          timingTakes={timingTakes}
+          onDevTiming={(on) => {
+            setDevTiming(on);
+            if (on && song === "kaszebe" && mode !== "linear") onMode("linear");
+            if (on) {
+              console.info(
+                "[timing] Developer timing is on. Guides are hidden. Play linear, click what you hear, then download the log from this menu.",
+              );
+            }
+          }}
+          onDownloadTiming={() => {
+            const takes = [...timingLog.current.takes];
+            if (openTake.current?.events.length) takes.push(openTake.current);
+            const log = {
+              song: "kaszebe",
+              order: "linear",
+              note: "Guides were hidden. down, up, and held are seconds from the start of the song.",
+              takes,
+            };
+            const blob = new Blob([JSON.stringify(log, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+            link.href = url;
+            link.download = `kaszebe-timing-${stamp}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+          }}
           onOpenSettings={() => {
             if (status === "playing" || status === "counting") pause();
           }}
