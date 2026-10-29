@@ -79,7 +79,7 @@ export const SQUARE_CARDS = [
 // Hit hugs the spheres only (not the wide caption). Ink matches that box for centering.
 export const FINAL_CARD = card("R4P4", "Final_icon.png", 700, 450, [
   hit("R4P4", 140, 70, 350, 250),
-], { left: 140, top: 70, right: 490, bottom: 320 });
+], { left: 140, top: 70, right: 540, bottom: 320 });
 // Nudge the mobile final upward on the 5th staff (board px).
 const VERTICAL_FINAL_LIFT = 90;
 
