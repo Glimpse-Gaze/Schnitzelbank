@@ -2,10 +2,25 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { framesAt, holdAt, steps } from "../data/sequence.js";
 import { songTime } from "../audio/useSong.js";
 import { layoutCouplets } from "./couplets.js";
-import { layoutKaszebe } from "./kaszebe.js";
-import { ApproachFrame, FolkHoldBar, PanelChrome } from "./kaszebeChrome.jsx";
+import { HOLD_FLOWERS, HORIZONTAL_QUERY, layoutKaszebe } from "./kaszebe.js";
+import { ApproachFrame, FolkHoldBar, HoldMark, PanelChrome } from "./kaszebeChrome.jsx";
 
 const CANVAS_PAD = 160;
+
+function useKaszebeOrientation(enabled) {
+  const [horizontal, setHorizontal] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia(HORIZONTAL_QUERY).matches,
+  );
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") return undefined;
+    const media = window.matchMedia(HORIZONTAL_QUERY);
+    const sync = () => setHorizontal(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, [enabled]);
+  return enabled && horizontal ? "horizontal" : "vertical";
+}
 const GRADE_LABEL = {
   perfect: "Perfect",
   good: "Good",
@@ -30,8 +45,8 @@ function posterBoard(couplets) {
   };
 }
 
-function kaszebeBoard(cards) {
-  const layout = layoutKaszebe(cards.wide, cards.square);
+function kaszebeBoard(cards, orientation) {
+  const layout = layoutKaszebe(cards, orientation);
   return {
     viewBox: `${-CANVAS_PAD} ${-CANVAS_PAD} ${layout.width + CANVAS_PAD * 2} ${layout.height + CANVAS_PAD * 2}`,
     width: layout.width + CANVAS_PAD * 2,
@@ -43,6 +58,7 @@ function kaszebeBoard(cards) {
     layers: layout.layers,
     panels: layout.panels,
     notes: [],
+    orientation: layout.orientation,
   };
 }
 
@@ -66,9 +82,10 @@ export default function Board({
   showCues = true,
   preview = false,
 }) {
+  const orientation = useKaszebeOrientation(song === "kaszebe" && !preview);
   const board = useMemo(
-    () => (song === "kaszebe" ? kaszebeBoard(cards) : posterBoard(couplets)),
-    [song, couplets, cards],
+    () => (song === "kaszebe" ? kaszebeBoard(cards, orientation) : posterBoard(couplets)),
+    [song, couplets, cards, orientation],
   );
   const [frames, setFrames] = useState([]);
   const [hold, setHold] = useState(null);
@@ -232,12 +249,18 @@ export default function Board({
                 height={panel.height}
                 fill="none"
                 stroke="#9fd0ee"
-                strokeWidth="15"
-                strokeDasharray="5 12"
+                strokeWidth="6"
+                strokeDasharray="2 7"
                 strokeLinecap="round"
                 pointerEvents="none"
               />
               <PanelChrome panel={panel} />
+              {HOLD_FLOWERS.has(panel.id) ? (
+                <HoldMark
+                  panel={panel}
+                  placement={board.orientation === "horizontal" ? "corner" : "above"}
+                />
+              ) : null}
               <PanelHit
                 panel={panel}
                 pressed={clickedPanel === panel.id}

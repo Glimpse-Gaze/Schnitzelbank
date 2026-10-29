@@ -319,6 +319,17 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === "Escape") {
+        if (!songRef.current) return;
+        event.preventDefault();
+        stop();
+        pan.current = { x: 0, y: 0 };
+        setPanOffset({ x: 0, y: 0 });
+        zoomRef.current = null;
+        setZoom(null);
+        setSong(null);
+        return;
+      }
       if (event.code !== "Space" || !songRef.current) return;
       event.preventDefault();
       if (status === "playing") pause();
@@ -326,7 +337,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [status, play, pause]);
+  }, [status, play, pause, stop]);
 
   const onStagePointerDown = (event) => {
     if (event.button !== 1 && event.button !== 2) return;

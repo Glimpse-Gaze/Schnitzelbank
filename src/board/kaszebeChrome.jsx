@@ -1,38 +1,65 @@
-// Kashubian frame chrome. Solid corner brackets mark every panel. The painted bar sits only on a hold.
+// Kashubian frame chrome. Beaded corners match the hover line. The painted bar sits only on a hold.
 
 const NAVY = "#1a4e8c";
 const SKY = "#9fd0ee";
+const YELLOW = "#F5C24E";
+const BEAD = "2 7";
+const CORNER_STROKE = 8;
 
 const BAR_SRC = "/Kaszebe_assembly/Progress_bar.png";
+const FLOWER_SRC = "/Kaszebe_assembly/Floral_pattern.png";
 const BAR_W = 420;
 const BAR_H = 100;
 
-function cornerBracket(x, y, dx, dy, arm, thick) {
-  const ox = x - dx * thick;
-  const oy = y - dy * thick;
-  const farX = ox + dx * (arm + thick);
-  const farY = oy + dy * (arm + thick);
-  const innerX = ox + dx * thick;
-  const innerY = oy + dy * thick;
-  return `M ${ox} ${oy} L ${farX} ${oy} L ${farX} ${innerY} L ${innerX} ${innerY} L ${innerX} ${farY} L ${ox} ${farY} Z`;
+function cornerPath(x, y, dx, dy, arm) {
+  return `M ${x + dx * arm} ${y} L ${x} ${y} L ${x} ${y + dy * arm}`;
 }
 
 export function PanelChrome({ panel }) {
   const { x, y, width, height } = panel;
-  const arm = Math.min(40, width * 0.2, height * 0.2);
-  const thick = Math.min(6, Math.max(8, arm * 0.36));
+  const arm = Math.min(14, width * 0.1, height * 0.1);
   const right = x + width;
   const bottom = y + height;
-  const path = [
-    cornerBracket(x, y, 1, 1, arm, thick),
-    cornerBracket(right, y, -1, 1, arm, thick),
-    cornerBracket(x, bottom, 1, -1, arm, thick),
-    cornerBracket(right, bottom, -1, -1, arm, thick),
-  ].join(" ");
+  const corners = [
+    cornerPath(x, y, 1, 1, arm),
+    cornerPath(right, y, -1, 1, arm),
+    cornerPath(x, bottom, 1, -1, arm),
+    cornerPath(right, bottom, -1, -1, arm),
+  ];
   return (
-    <g pointerEvents="none">
-      <path d={path} fill={SKY} />
+    <g
+      pointerEvents="none"
+      fill="none"
+      stroke={SKY}
+      strokeWidth={CORNER_STROKE}
+      strokeDasharray={BEAD}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {corners.map((d) => (
+        <path key={d} d={d} />
+      ))}
     </g>
+  );
+}
+
+export function HoldMark({ panel, placement = "above" }) {
+  const size = Math.min(52, Math.max(32, panel.width * 0.22));
+  const x = placement === "corner"
+    ? panel.x + panel.width - size * 0.35
+    : panel.x + panel.width / 2 - size / 2;
+  const y = placement === "corner"
+    ? panel.y - size * 0.55
+    : panel.y - size - 8;
+  return (
+    <image
+      href={FLOWER_SRC}
+      x={x}
+      y={y}
+      width={size}
+      height={size}
+      pointerEvents="none"
+    />
   );
 }
 
@@ -87,6 +114,14 @@ export function FolkHoldBar({ chromeId, bounds, progress }) {
         <rect x={x} y={y} width={barW} height={barH} />
       </clipPath>
       <image href={BAR_SRC} x={x} y={y} width={barW} height={barH} clipPath={`url(#${clipId})`} />
+      <circle
+        cx={slotX + slotW}
+        cy={slotY + slotH / 2}
+        r={Math.max(8, slotH * 0.78)}
+        fill={amount >= 0.97 ? YELLOW : "#f4efe2"}
+        stroke={NAVY}
+        strokeWidth={Math.max(2.5, slotH * 0.16)}
+      />
     </g>
   );
 }
