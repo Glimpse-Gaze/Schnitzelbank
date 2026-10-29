@@ -33,7 +33,11 @@ function VolumeControl({ volume, onVolume }) {
       if (!rootRef.current?.contains(event.target)) setOpen(false);
     };
     const onKeyDown = (event) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        setOpen(false);
+      }
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -79,7 +83,11 @@ function useDismiss(open, rootRef, onClose) {
       if (!rootRef.current?.contains(event.target)) onClose();
     };
     const onKeyDown = (event) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        onClose();
+      }
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);

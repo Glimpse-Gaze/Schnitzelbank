@@ -42,6 +42,13 @@ const PHRASES = {
   ptoczi: { caller: ["To są ptôczi."], reply: ["ptôk"] },
   poltrojeczi: { caller: ["To są prësczé", "półtrojôczi."] },
   poltorak: { reply: ["półtrojôk"] },
+  kleka: { caller: ["To je klëka,"], reply: ["klëka"] },
+  wol: { caller: ["to je wół,"], reply: ["wół"] },
+  cale: { caller: ["to je całé,"], reply: ["Całé"] },
+  pol: { caller: ["a to pół."], reply: ["pół"] },
+  male: { reply: ["To je môłé,"] },
+  wielki: { reply: ["a to wiôldżé,"] },
+  instrumenta: { reply: ["to są jinstrumenta wszelczé."] },
 };
 
 const RE_PANELS = [
@@ -58,6 +65,13 @@ const RE_PANELS = [
   ["poltorak", ["R3P3"]],
   ["ptoczi", ["R3P2"]],
   ["hoczi", ["R3P1"]],
+  ["kleka", ["R4P1"]],
+  ["wol", ["R4P2"]],
+  ["cale", ["R4P3"]],
+  ["pol", ["R4P3"]],
+  ["male", ["R4P4"]],
+  ["wielki", ["R4P4"]],
+  ["instrumenta", ["R4P4"]],
 ];
 
 function fold(name) {
@@ -135,11 +149,11 @@ const MEASURED = {
 const measuredCursor = {};
 
 function takeMeasured(key) {
+  const list = MEASURED[key];
+  if (!list?.length) return { press: 0, release: 0 };
   const index = measuredCursor[key] ?? 0;
   measuredCursor[key] = index + 1;
-  const sample = MEASURED[key]?.[index];
-  if (!sample) throw new Error(`No measured timing for ${key} repetition ${index + 1}`);
-  return sample;
+  return list[Math.min(index, list.length - 1)];
 }
 
 function isPhrase(marker) {
@@ -154,37 +168,39 @@ function pointKind(marker) {
   return "second";
 }
 
-function pushClick(cues, { panel, perfect, end, lines, tone, span }) {
+function pushClick(cues, { panel, perfect, end, lines, tone, span, approach, start }) {
+  const travel = approach ?? APPROACH;
   cues.push({
     panel,
     perfect,
     lead: GRADE_LEAD,
-    approach: APPROACH,
+    approach: travel,
     lateRatio: LATE_WINDOW / GRADE_LEAD,
     settle: SETTLE,
     span,
-    start: perfect - APPROACH,
+    start: start ?? perfect - travel,
     end,
     lines,
     tone,
   });
 }
 
-function pushHold(cues, { panel, perfect, releaseAt, end, lines, tone, span }) {
+function pushHold(cues, { panel, perfect, releaseAt, end, lines, tone, span, approach, start }) {
+  const travel = approach ?? APPROACH;
   cues.push({
     hold: true,
     panel,
     panels: [panel],
     perfect,
     lead: GRADE_LEAD,
-    approach: APPROACH,
+    approach: travel,
     lateRatio: LATE_WINDOW / GRADE_LEAD,
     settle: SETTLE,
     releaseAt,
     releaseLead: 0.26,
     releaseLateRatio: 0.55,
     span,
-    start: perfect - APPROACH,
+    start: start ?? perfect - travel,
     end,
     lines,
     tone,
@@ -254,6 +270,46 @@ function addPair(cues, marker, points, panels, lyricEnd, lines, tone) {
   });
 }
 
+function addMarkedTap(cues, marker, points, panel, lyricEnd, lines, tone) {
+  const hit = points.find((point) => fold(point.name).endsWith("hit"));
+  if (!hit) throw new Error(`Hit marker missing after ${marker.name}`);
+  const perfect = hit.time;
+  const approach = Math.max(0.45, perfect - marker.time);
+  pushClick(cues, {
+    panel,
+    perfect,
+    end: lyricEnd,
+    lines,
+    tone,
+    span: Math.max(0.2, lyricEnd - perfect),
+    approach,
+    start: marker.time,
+  });
+}
+
+function addMarkedHold(cues, marker, points, panel, lyricEnd, lines, tone) {
+  const hit = points.find((point) => fold(point.name).endsWith("hit"));
+  const release = points.find((point) => {
+    const key = fold(point.name);
+    return key.endsWith("end") && !key.startsWith("endof");
+  });
+  if (!hit || !release) throw new Error(`Hold markers missing after ${marker.name}`);
+  const perfect = hit.time;
+  const releaseAt = release.time;
+  const approach = Math.max(0.45, perfect - marker.time);
+  pushHold(cues, {
+    panel,
+    perfect,
+    releaseAt,
+    end: lyricEnd,
+    lines,
+    tone,
+    span: Math.max(0.2, releaseAt - perfect),
+    approach,
+    start: marker.time,
+  });
+}
+
 function addSingle(cues, marker, panels, lyricEnd, lines, tone) {
   const span = marker.duration;
   const key = fold(marker.name);
@@ -309,6 +365,14 @@ export function installKaszebe(markers, duration) {
       continue;
     }
     const panels = panelsFor(marker.name);
+    if (key === "male" || key === "wielki") {
+      addMarkedTap(cues, marker, points, panels[0], lyricEnd, lines, tone);
+      continue;
+    }
+    if (key === "instrumenta") {
+      addMarkedHold(cues, marker, points, panels[0], lyricEnd, lines, tone);
+      continue;
+    }
     if (panels.length > 1) addPair(cues, marker, points, panels, lyricEnd, lines, tone);
     else addSingle(cues, marker, panels, lyricEnd, lines, tone);
   }

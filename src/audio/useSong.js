@@ -13,7 +13,7 @@ const SONGS = {
   kaszebe: {
     music: "/audio/Kaszebe_Music.wav",
     caller: "/audio/Kaszebe_Caller.wav",
-    audience: "/audio/Kaszebe_Audience2.wav",
+    audience: "/audio/Kaszebe_Audience.wav",
     bed: true,
   },
 };
