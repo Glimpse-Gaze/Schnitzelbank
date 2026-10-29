@@ -43,13 +43,20 @@ export function PanelChrome({ panel }) {
   );
 }
 
-export function HoldMark({ panel, placement = "above" }) {
-  const size = Math.min(52, Math.max(32, panel.width * 0.22));
+// Absolute flower sizes (board px). Mobile uses the taller vertical board.
+export const HOLD_FLOWER_SIZE_HORIZONTAL = 65;
+export const HOLD_FLOWER_SIZE_MOBILE = 105;
+
+export function HoldMark({ panel, placement = "above", orientation = "horizontal" }) {
+  const size = placement === "corner"
+    ? (orientation === "vertical" ? HOLD_FLOWER_SIZE_MOBILE : HOLD_FLOWER_SIZE_HORIZONTAL)
+    : Math.min(52, Math.max(32, panel.width * 0.22));
+  // Corner: center the flower on the panel's top-right corner point.
   const x = placement === "corner"
-    ? panel.x + panel.width - size * 0.35
+    ? panel.x + panel.width - size / 2
     : panel.x + panel.width / 2 - size / 2;
   const y = placement === "corner"
-    ? panel.y - size * 0.55
+    ? panel.y - size / 2
     : panel.y - size - 8;
   return (
     <image

@@ -76,9 +76,12 @@ export const SQUARE_CARDS = [
   ], { left: 16, top: 30, right: 416, bottom: 304 }),
 ];
 
+// Hit hugs the spheres only (not the wide caption). Ink matches that box for centering.
 export const FINAL_CARD = card("R4P4", "Final_icon.png", 700, 450, [
-  hit("R4P4", 20, 80, 660, 250),
-], { left: 24, top: 86, right: 660, bottom: 340 });
+  hit("R4P4", 140, 70, 350, 250),
+], { left: 140, top: 70, right: 490, bottom: 320 });
+// Nudge the mobile final upward on the 5th staff (board px).
+const VERTICAL_FINAL_LIFT = 90;
 
 // Browser / landscape: one file per picture, spaced along each staff.
 export const HORIZONTAL_ROWS = [
@@ -136,9 +139,7 @@ export const HORIZONTAL_ROWS = [
     card("R4P3", "Całe_pół.png", 450, 450, [
       hit("R4P3", 16, 12, 400, 280),
     ], { left: 16, top: 30, right: 416, bottom: 304 }),
-    card("R4P4", "Final_icon.png", 700, 450, [
-      hit("R4P4", 20, 80, 660, 250),
-    ], { left: 24, top: 86, right: 660, bottom: 340 }),
+    FINAL_CARD,
   ],
 ];
 
@@ -169,13 +170,13 @@ const VERTICAL_STAFF_Y = [537, 1022, 1539, 2033, 2552];
 const HORIZONTAL_CLEF = 210;
 const HORIZONTAL_RIGHT = 1500;
 // Bottom line of each staff on the 1600×1200 empty board.
-const HORIZONTAL_STAFF_BOTTOM = [405, 662, 910, 1120];
+const HORIZONTAL_STAFF_BOTTOM = [400, 670, 910, 1130];
 // Horizontal icon size (1 = native couplet pixels). Raise/lower to taste.
 const HORIZONTAL_MAX_SCALE = 0.6;
 // Last staff only — relative to HORIZONTAL_MAX_SCALE (0.9 ≈ 10% smaller).
 const HORIZONTAL_ROW4_SCALE = HORIZONTAL_MAX_SCALE * 0.9;
 // Row 3: ptôczi sits on the board center; side icons sit this many px from that center.
-const HORIZONTAL_ROW3_SIDE_OFFSET = 400;
+const HORIZONTAL_ROW3_SIDE_OFFSET = 380;
 // Final icon alone on the mobile 5th staff (1 = native Final_icon.png size).
 const VERTICAL_FINAL_SCALE = 1.12;
 
@@ -220,10 +221,13 @@ export function shuffleKaszebe(current) {
 
 function weightOf(item) {
   if (item.id === "R4P1") return 0.9;
-  if (item.id === "R4P2") return 0.94;
-  if (item.id === "R4P3") return 0.95;
+  if (item.id === "R4P2") return 0.9;
+  if (item.id === "R4P3") return 0.92;
   // Final spheres: +10% vs prior size even when row 4 is scaled down.
-  if (item.id === "R4P4") return 1.00;
+  if (item.id === "R4P4") return 1.05;
+  if (item.id === "R3P3") return 0.92;
+  if (item.id === "R3P2") return 0.92;
+  if (item.id === "R3P1") return 0.92;
   return 1;
 }
 
@@ -301,7 +305,7 @@ function placeCards(placements, tiles, panels) {
   }
 }
 
-function layoutVertical(wide, square, final) {
+function layoutVertical(wide, square) {
   const tiles = [];
   const panels = [];
   const pack = (cards, staffY, gap) =>
@@ -310,8 +314,9 @@ function layoutVertical(wide, square, final) {
   placeCards(pack(wide.slice(2, 4), VERTICAL_STAFF_Y[1], 100), tiles, panels);
   placeCards(pack(square.slice(0, 3), VERTICAL_STAFF_Y[2], 80), tiles, panels);
   placeCards(pack(square.slice(3, 6), VERTICAL_STAFF_Y[3], 80), tiles, panels);
+  // Always use the live FINAL_CARD so hit/ink edits apply (App state can hold a stale copy).
   const finale = packRow(
-    [final ?? FINAL_CARD],
+    [FINAL_CARD],
     VERTICAL_STAFF_Y[4],
     0,
     VERTICAL_CLEF,
@@ -323,7 +328,11 @@ function layoutVertical(wide, square, final) {
   const inkLeft = finaleItem.x + finaleItem.item.ink.left * finaleItem.scale;
   const inkRight = finaleItem.x + finaleItem.item.ink.right * finaleItem.scale;
   const shift = (VERTICAL_CLEF + VERTICAL_RIGHT) / 2 - (inkLeft + inkRight) / 2;
-  placeCards([{ ...finaleItem, x: finaleItem.x + shift }], tiles, panels);
+  placeCards([{
+    ...finaleItem,
+    x: finaleItem.x + shift,
+    y: finaleItem.y - VERTICAL_FINAL_LIFT,
+  }], tiles, panels);
   return {
     orientation: "vertical",
     width: VERTICAL_TEMPLATE.width,
@@ -370,7 +379,7 @@ function layoutHorizontal(rows) {
   );
   placeCards(
     packRow(
-      source[3],
+      source[3].map((item) => (item.id === "R4P4" ? FINAL_CARD : item)),
       HORIZONTAL_STAFF_BOTTOM[3],
       90,
       HORIZONTAL_CLEF,
@@ -401,9 +410,5 @@ function layoutHorizontal(rows) {
 
 export function layoutKaszebe(cards, orientation = "vertical") {
   if (orientation === "horizontal") return layoutHorizontal(cards?.rows);
-  return layoutVertical(
-    cards?.wide ?? WIDE_CARDS,
-    cards?.square ?? SQUARE_CARDS,
-    cards?.final ?? FINAL_CARD,
-  );
+  return layoutVertical(cards?.wide ?? WIDE_CARDS, cards?.square ?? SQUARE_CARDS);
 }

@@ -258,7 +258,8 @@ export default function Board({
               {HOLD_FLOWERS.has(panel.id) ? (
                 <HoldMark
                   panel={panel}
-                  placement={board.orientation === "horizontal" ? "corner" : "above"}
+                  placement="corner"
+                  orientation={board.orientation === "vertical" ? "vertical" : "horizontal"}
                 />
               ) : null}
               <PanelHit
