@@ -106,44 +106,62 @@ const LATE_WINDOW = 0.22;
 const SETTLE = 0.16;
 const HOJNE_PANEL = pairTarget(["R2P1.3", "R2P1.4"]);
 
-// Median press and release from six linear plays with the guides hidden
-// (kaszebe-timing-2026-10-08-23-04-16). Two mistaken clicks in take 5 are
-// excluded. Each value is seconds after that phrase's Premiere marker.
-// Repeats are listed in the order they are sung, because the lag is not the same every time.
+// Median press and release from linear plays with the guides hidden
+// (kaszebe-timing-2026-11-03-00-45-33, takes 3–4). Mistaken taps/holds
+// from takes 1, 2, and 5 are excluded. Each value is seconds after that
+// phrase's Premiere marker (or after the pair's second-word marker).
+// Repeats are listed in sung order — the lag is not the same every time.
+// instrumenta / male / wielki offsets are relative to their hit/end markers.
 const MEASURED = {
   kaszeba: [
-    { press: 0.398, release: 0.183 },
-    { press: 0.302, release: 0.227 },
-    { press: 0.3, release: 0.205 },
+    { press: 0.267, release: -0.043 },
+    { press: 0.127, release: 0.047 },
+    { press: 0.158, release: 0.034 },
+    { press: 0.089, release: -0.28 },
   ],
-  base: [{ press: 0.345 }, { press: 0.273 }, { press: 0.292 }],
-  skrzepce: [{ press: 0.267 }, { press: 0.242 }, { press: 0.278 }],
-  krotkie: [{ press: 0.209 }, { press: 0.187 }, { press: 0.255 }],
-  dludze: [{ press: 0.208 }, { press: 0.178 }, { press: 0.255 }],
+  base: [{ press: 0.164 }, { press: 0.123 }, { press: 0.111 }, { press: 0.12 }],
+  skrzepce: [{ press: 0.039 }, { press: 0.08 }, { press: 0.072 }, { press: 0.088 }],
+  krotkie: [{ press: 0.052 }, { press: 0.016 }, { press: 0.068 }, { press: 0.141 }],
+  dludze: [{ press: 0.022 }, { press: 0.018 }, { press: 0.075 }, { press: 0.131 }],
   stolica: [
-    { press: 0.309, release: 0.166 },
-    { press: 0.283, release: 0.182 },
-    { press: 0.242, release: 0.261 },
+    { press: 0.122, release: 0.016 },
+    { press: 0.112, release: -0.002 },
+    { press: 0.068, release: 0.131 },
+    { press: 0.019, release: -0.321 },
   ],
   tylnekolo: [
-    { press: 0.373, release: 0.285 },
-    { press: 0.272, release: 0.227 },
+    { press: 0.269, release: -0.07 },
+    { press: 0.13, release: 0.042 },
+    { press: 0.183, release: -0.093 },
   ],
-  proste: [{ press: 0.357 }, { press: 0.371 }],
-  krzywe: [{ press: 0.407 }, { press: 0.351 }],
+  proste: [{ press: 0.162 }, { press: 0.191 }, { press: 0.176 }],
+  krzywe: [{ press: 0.193 }, { press: 0.172 }, { press: 0.14 }],
   hojne: [
-    { press: 0.269, release: 0.136 },
-    { press: 0.255, release: 0.197 },
+    { press: 0.054, release: -0.105 },
+    { press: 0.085, release: 0.016 },
+    { press: 0.036, release: -0.077 },
   ],
   widle: [
-    { press: 0.225, release: 0.205 },
-    { press: 0.249, release: 0.212 },
+    { press: 0.045, release: 0.153 },
+    { press: 0.079, release: 0.156 },
+    { press: 0.017, release: -0.125 },
   ],
-  ridel: [{ press: 0.355 }, { press: 0.231 }],
-  tycz: [{ press: 0.277 }, { press: 0.225 }],
-  hoczi: [{ press: 0.257 }],
-  ptoczi: [{ press: 0.188 }],
-  poltorak: [{ press: 0.243, release: 0.134 }],
+  ridel: [{ press: 0.261 }, { press: 0.064 }, { press: 0.135 }],
+  tycz: [{ press: 0.086 }, { press: 0.045 }, { press: 0.067 }],
+  hoczi: [{ press: 0.116 }, { press: 0.054 }],
+  ptoczi: [{ press: 0 }, { press: 0.026 }],
+  poltorak: [
+    { press: 0.052, release: -0.101 },
+    { press: 0.036, release: -0.265 },
+  ],
+  kleka: [{ press: 0 }],
+  wol: [{ press: 0.111 }],
+  cale: [{ press: 0.081 }],
+  pol: [{ press: 0.063 }],
+  male: [{ press: 0.14 }],
+  wielki: [{ press: 0.178 }],
+  // Premiere "Instrumenta end" lands in the instrumental; players release ~0.7s earlier.
+  instrumenta: [{ press: -1.103, release: -0.701 }],
 };
 
 const measuredCursor = {};
@@ -273,7 +291,8 @@ function addPair(cues, marker, points, panels, lyricEnd, lines, tone) {
 function addMarkedTap(cues, marker, points, panel, lyricEnd, lines, tone) {
   const hit = points.find((point) => fold(point.name).endsWith("hit"));
   if (!hit) throw new Error(`Hit marker missing after ${marker.name}`);
-  const perfect = hit.time;
+  const sample = takeMeasured(fold(marker.name));
+  const perfect = hit.time + sample.press;
   const approach = Math.max(0.45, perfect - marker.time);
   pushClick(cues, {
     panel,
@@ -294,9 +313,12 @@ function addMarkedHold(cues, marker, points, panel, lyricEnd, lines, tone) {
     return key.endsWith("end") && !key.startsWith("endof");
   });
   if (!hit || !release) throw new Error(`Hold markers missing after ${marker.name}`);
-  const perfect = hit.time;
-  const releaseAt = release.time;
-  const approach = Math.max(0.45, perfect - marker.time);
+  const sample = takeMeasured(fold(marker.name));
+  const perfect = hit.time + sample.press;
+  const releaseAt = release.time + (sample.release ?? 0);
+  // Keep the slow Premiere approach even when measured press lands near the
+  // phrase start (instrumenta). Otherwise the frame pops in for ~0.1s.
+  const approach = Math.max(APPROACH, hit.time - marker.time, perfect - marker.time);
   pushHold(cues, {
     panel,
     perfect,
@@ -306,7 +328,7 @@ function addMarkedHold(cues, marker, points, panel, lyricEnd, lines, tone) {
     tone,
     span: Math.max(0.2, releaseAt - perfect),
     approach,
-    start: marker.time,
+    start: perfect - approach,
   });
 }
 

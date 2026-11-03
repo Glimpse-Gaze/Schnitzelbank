@@ -146,6 +146,11 @@ export function stepAt(time) {
   return null;
 }
 
+export function isRefrainAt(time) {
+  const step = stepAt(time);
+  return Boolean(step && step.panel === "R0P0" && !step.prompt);
+}
+
 export function promptClose(step) {
   return step.perfect + (step.settle ?? 0) + step.lead * (step.lateRatio ?? LATE_RATIO);
 }

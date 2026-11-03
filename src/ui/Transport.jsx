@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { DIFFICULTY_OPTIONS } from "../score/difficulty.js";
 import { requestZoom } from "../scene/zoomBus.js";
 
 function Glyph({ children }) {
@@ -115,18 +116,13 @@ function ZoomControls() {
   );
 }
 
-const MODES = [
-  { id: "linear", label: "Linear", detail: "Pictures stay in song order." },
-  { id: "shuffled", label: "Shuffled", detail: "Pictures are mixed." },
-];
-
 export function CanvasTools({
   volume,
   onVolume,
   showCues,
   onToggleCues,
-  mode,
-  onMode,
+  difficulty,
+  onDifficulty,
   onOpenSettings,
   onSwap,
   swapDetail,
@@ -191,14 +187,14 @@ export function CanvasTools({
             </button>
             {settingsOpen ? (
               <div className="settings-menu" role="dialog" aria-label="Game mode">
-                <p className="settings-menu__title">Game mode</p>
-                {MODES.map((item) => (
+                <p className="settings-menu__title">Difficulty</p>
+                {DIFFICULTY_OPTIONS.map((item) => (
                   <button
                     key={item.id}
                     type="button"
-                    className={mode === item.id ? "mode-option is-selected" : "mode-option"}
-                    aria-pressed={mode === item.id}
-                    onClick={() => onMode(item.id)}
+                    className={difficulty === item.id ? "mode-option is-selected" : "mode-option"}
+                    aria-pressed={difficulty === item.id}
+                    onClick={() => onDifficulty?.(item.id)}
                   >
                     <span>{item.label}</span>
                     <small>{item.detail}</small>

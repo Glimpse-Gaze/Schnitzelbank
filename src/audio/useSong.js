@@ -119,6 +119,7 @@ export default function useSong(song) {
   const [countdown, setCountdown] = useState(null);
   const [error, setError] = useState("");
   const [volume, setVolumeState] = useState(sharedVolume);
+  const [endReason, setEndReason] = useState(null);
   const [, setReady] = useState(false);
 
   useEffect(() => {
@@ -189,6 +190,7 @@ export default function useSong(song) {
         engine.offset = 0;
         engine.status = "stopped";
         setTime(0);
+        setEndReason("complete");
         setStatus("stopped");
         return;
       }
@@ -234,6 +236,7 @@ export default function useSong(song) {
       return;
     }
     engine.offset = 0;
+    setEndReason(null);
     setCountdown(3);
     engine.status = "counting";
     setStatus("counting");
@@ -244,6 +247,7 @@ export default function useSong(song) {
       setCountdown(null);
       engine.offset = 0;
       engine.status = "stopped";
+      setEndReason(null);
       setStatus("stopped");
       return;
     }
@@ -264,14 +268,16 @@ export default function useSong(song) {
   };
 
   const stop = () => {
+    const fromRun = status === "playing" || status === "paused";
     stopList(engine.sources);
     stopList(engine.responses);
     engine.offset = 0;
     engine.status = "stopped";
     setCountdown(null);
     setTime(0);
+    setEndReason(fromRun ? "stop" : null);
     setStatus("stopped");
   };
 
-  return { status, time, countdown, error, volume, setVolume, play, pause, stop };
+  return { status, time, countdown, error, volume, setVolume, play, pause, stop, endReason };
 }
