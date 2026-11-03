@@ -170,14 +170,65 @@ function approachOf(step) {
   return step.approach ?? step.lead;
 }
 
+// Hold-release windows as a fraction of hold length (right-aligned on the meter).
+// Painted zones: Perfect ~2%, Good ~7%, Ok ~15%. Scoring matches Perfect to the
+// slit; Ok/Good are only ~2% of bar width more forgiving than the paint.
+export const RELEASE_VISUAL = {
+  perfect: 0.02,
+  good: 0.07,
+  ok: 0.15,
+};
+export const RELEASE_SCORE_PAD = 0.02;
+
+export function releaseHoldLength(step) {
+  return Math.max(0.2, step.releaseAt - step.perfect);
+}
+
+export function releaseWindows(step) {
+  const length = releaseHoldLength(step);
+  const visual = {
+    perfect: length * RELEASE_VISUAL.perfect,
+    good: length * RELEASE_VISUAL.good,
+    ok: length * RELEASE_VISUAL.ok,
+  };
+  const pad = length * RELEASE_SCORE_PAD;
+  return {
+    length,
+    visual,
+    score: {
+      // Keep Perfect glued to the slit — padding Perfect made "Good" paint score Perfect.
+      perfect: visual.perfect,
+      good: visual.good + pad,
+      ok: visual.ok + pad,
+    },
+  };
+}
+
+export function gradeRelease(time, step) {
+  const err = Math.abs(time - step.releaseAt);
+  const { score } = releaseWindows(step);
+  if (err <= score.perfect) return "perfect";
+  if (err <= score.good) return "good";
+  if (err <= score.ok) return "ok";
+  return time >= step.releaseAt ? "late" : "early";
+}
+
 export function holdAt(time) {
   for (const step of steps) {
     if (!step.hold) continue;
     const began = step.perfect - approachOf(step);
     if (time < began || time > releaseClose(step)) continue;
-    const length = Math.max(0.2, step.releaseAt - step.perfect);
+    const { length, visual } = releaseWindows(step);
     const progress = time <= step.perfect ? 0 : Math.min(1, (time - step.perfect) / length);
-    return { index: step.index, panels: step.panels, progress };
+    return {
+      index: step.index,
+      panels: step.panels,
+      progress,
+      // Painted zones use the tighter visual windows; scoring is slightly wider.
+      okFrom: Math.max(0, 1 - visual.ok / length),
+      goodFrom: Math.max(0, 1 - visual.good / length),
+      perfectFrom: Math.max(0, 1 - visual.perfect / length),
+    };
   }
   return null;
 }

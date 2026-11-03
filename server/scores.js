@@ -101,6 +101,7 @@ function mapRow(row, rank) {
     rank,
     nickname: row.nickname,
     score: Number(row.top_score),
+    accuracy: row.accuracy == null ? null : Number(row.accuracy),
     locale: row.locale || null,
   };
 }
@@ -113,7 +114,7 @@ export async function listLeaderboard(databaseUrl, { song, difficulty, limit = 1
   const sql = sqlClient(databaseUrl);
   const take = Math.min(50, Math.max(1, Number(limit) || 10));
   const rows = await sql`
-    SELECT nickname, locale, top_score
+    SELECT nickname, locale, top_score, accuracy
     FROM scores
     WHERE song = ${song} AND difficulty = ${difficulty}
     ORDER BY top_score DESC, updated_at ASC

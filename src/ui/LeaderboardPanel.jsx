@@ -7,6 +7,11 @@ function localeCell(code) {
   return code ? String(code).toUpperCase() : "-";
 }
 
+function accuracyCell(value) {
+  if (value == null || !Number.isFinite(Number(value))) return "-";
+  return `${Math.round(Number(value))}`;
+}
+
 export default function LeaderboardPanel({
   song,
   difficulty,
@@ -57,8 +62,9 @@ export default function LeaderboardPanel({
           <p className="leaderboard__title">{title}</p>
           <p className="leaderboard__course">{difficultyLabel(difficulty)}</p>
           <div className="leaderboard__head" aria-hidden="true">
-            <span>RANK</span>
+            <span>#</span>
             <span>SCORE</span>
+            <span>ACC</span>
             <span>NAME</span>
             <span>LOC</span>
           </div>
@@ -72,6 +78,7 @@ export default function LeaderboardPanel({
               <li key={`${entry.rank}-${entry.nickname}-${entry.score}`} className={entry.rank === 1 ? "is-top" : undefined}>
                 <span>{entry.rank}</span>
                 <span>{entry.score}</span>
+                <span>{accuracyCell(entry.accuracy)}</span>
                 <span>{entry.nickname}</span>
                 <span>{localeCell(entry.locale)}</span>
               </li>

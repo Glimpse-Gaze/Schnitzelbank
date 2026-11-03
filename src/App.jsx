@@ -9,6 +9,7 @@ import { CanvasTools, Playback } from "./ui/Transport.jsx";
 import useSong, { playResponse, setAudienceLoud, songTime } from "./audio/useSong.js";
 import {
   gradeAt,
+  gradeRelease,
   holdForPanel,
   isRefrainAt,
   promptClose,
@@ -248,7 +249,7 @@ export default function App() {
     const step = steps[current.index];
     if (!step || judged.current.has(step.index)) return;
     judged.current.add(step.index);
-    const released = gradeAt(songTime(), { perfect: step.releaseAt, lead: step.releaseLead });
+    const released = gradeRelease(songTime(), step);
     recordGrade(released);
     setGrade({
       index: step.index,

@@ -851,9 +851,20 @@ body {
 .leaderboard__head,
 .leaderboard__list li {
   display: grid;
-  grid-template-columns: 48px 1fr 72px 36px;
+  grid-template-columns: 24px 58px 36px minmax(0, 1fr) 28px;
   gap: 6px;
   align-items: center;
+}
+
+.leaderboard__list li > span:nth-child(4) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard__list li > span:nth-child(5) {
+  text-align: right;
 }
 
 .leaderboard__head {

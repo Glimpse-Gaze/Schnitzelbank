@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { framesAt, holdAt, steps } from "../data/sequence.js";
 import { songTime } from "../audio/useSong.js";
 import { layoutCouplets } from "./couplets.js";
@@ -89,23 +89,7 @@ export default function Board({
   );
   const [frames, setFrames] = useState([]);
   const [hold, setHold] = useState(null);
-  const [heldBar, setHeldBar] = useState(null);
-  const [barShown, setBarShown] = useState(false);
-  const holdRef = useRef(null);
-  if (hold) holdRef.current = hold;
   const holdActive = Boolean(showCues && hold);
-
-  useEffect(() => {
-    if (holdActive) {
-      setHeldBar(holdRef.current);
-      setBarShown(false);
-      const frame = requestAnimationFrame(() => setBarShown(true));
-      return () => cancelAnimationFrame(frame);
-    }
-    setBarShown(false);
-    const timer = window.setTimeout(() => setHeldBar(null), 200);
-    return () => window.clearTimeout(timer);
-  }, [holdActive]);
 
   useEffect(() => {
     if (status !== "playing") return undefined;
@@ -152,9 +136,8 @@ export default function Board({
   const gradeTop = gradedPanel
     ? gradedPanel.y + gradedPanel.height / 2 - (gradedPanel.height * gradeScale) / 2
     : 0;
-  const barModel = holdActive ? hold : heldBar;
-  const barPanels = barModel
-    ? barModel.panels.map((id) => panels.find((panel) => panel.id === id)).filter(Boolean)
+  const barPanels = holdActive
+    ? hold.panels.map((id) => panels.find((panel) => panel.id === id)).filter(Boolean)
     : [];
 
   return (
@@ -305,19 +288,26 @@ export default function Board({
           label="Prost!"
         />
       ) : null}
-      {barPanels.length ? (
-        <div className={barShown ? "board-hold is-on" : "board-hold"}>
+      {barPanels.length && hold ? (
+        <div className="board-hold is-on">
           <svg viewBox={board.viewBox} aria-hidden="true">
             {song === "kaszebe" ? (
               <FolkHoldBar
                 chromeId={chromeId}
                 bounds={unionOf(barPanels)}
-                progress={holding && hold ? hold.progress : 0}
+                progress={holding ? hold.progress : 0}
+                okFrom={hold.okFrom}
+                goodFrom={hold.goodFrom}
+                perfectFrom={hold.perfectFrom}
               />
             ) : (
               <HoldBar
+                chromeId={chromeId}
                 bounds={unionOf(barPanels)}
-                progress={holding && hold ? hold.progress : 0}
+                progress={holding ? hold.progress : 0}
+                okFrom={hold.okFrom}
+                goodFrom={hold.goodFrom}
+                perfectFrom={hold.perfectFrom}
               />
             )}
           </svg>
@@ -415,21 +405,49 @@ function PanelHit({ panel, pressed, hovered = false, folk = false, onPointerEnte
   );
 }
 
-function HoldBar({ bounds, progress }) {
+function HoldBar({
+  chromeId = "hold",
+  bounds,
+  progress,
+  okFrom = 0.9,
+  goodFrom = 0.95,
+  perfectFrom = 0.98,
+}) {
   if (!bounds || !Number.isFinite(bounds.width)) return null;
   const y = bounds.y + Math.min(36, bounds.height * 0.22);
   const x0 = bounds.x + 8;
   const x1 = bounds.x + bounds.width - 8;
-  const fill = x0 + (x1 - x0) * progress;
+  const span = x1 - x0;
+  const fill = x0 + span * progress;
+  const ok = Math.min(1, Math.max(0, okFrom));
+  const good = Math.min(1, Math.max(ok, goodFrom));
+  const perfect = Math.min(1, Math.max(good, perfectFrom));
+  const okX = x0 + span * ok;
+  const goodX = x0 + span * good;
+  const perfectX = x0 + span * perfect;
+  const hatchOk = `${chromeId}-plain-hatch-ok`;
   return (
     <g pointerEvents="none">
+      <defs>
+        <pattern id={hatchOk} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="5" stroke="#fffef6" strokeWidth="2.4" />
+        </pattern>
+      </defs>
       <line x1={x0} y1={y} x2={x1} y2={y} stroke="#1a1a1a" strokeWidth="16" strokeLinecap="round" opacity="0.72" />
+      {/* Zones under fill so the progress stroke overlaps Ok / Good / Perfect. */}
+      {goodX > okX ? (
+        <>
+          <line x1={okX} y1={y} x2={goodX} y2={y} stroke="#e0a63a" strokeWidth="16" strokeLinecap="butt" />
+          <line x1={okX} y1={y} x2={goodX} y2={y} stroke={`url(#${hatchOk})`} strokeWidth="16" strokeLinecap="butt" />
+        </>
+      ) : null}
+      {perfectX > goodX ? (
+        <line x1={goodX} y1={y} x2={perfectX} y2={y} stroke="#cc7939" strokeWidth="16" strokeLinecap="butt" />
+      ) : null}
+      <line x1={perfectX} y1={y} x2={x1} y2={y} stroke="#9B1212" strokeWidth="16" strokeLinecap="butt" />
       {progress > 0.01 ? (
         <line x1={x0} y1={y} x2={fill} y2={y} stroke="#ff4b00" strokeWidth="16" strokeLinecap="butt" />
       ) : null}
-      <circle cx={x0} cy={y} r="15" fill="#ff4b00" stroke="#1a1a1a" strokeWidth="3" />
-      <circle cx={x1} cy={y} r="16" fill="#f7f1e6" stroke="#1a1a1a" strokeWidth="4" />
-      <circle cx={x1} cy={y} r="5" fill="#1a1a1a" />
     </g>
   );
 }
