@@ -89,6 +89,32 @@ body {
   cursor: pointer;
 }
 
+/* Folk pointer: desktop / fine pointer only, only while over the board art. */
+.board-pointer {
+  position: fixed;
+  z-index: 40;
+  width: auto;
+  height: 220px;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  user-select: none;
+  transform: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .board-frame.has-board-cursor,
+  .board-frame.has-board-cursor * {
+    cursor: none !important;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .board-pointer {
+    display: none !important;
+  }
+}
+
 .kaszebe-hover {
   opacity: 0;
   transition: opacity 140ms ease;

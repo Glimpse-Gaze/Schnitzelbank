@@ -20,7 +20,7 @@ function loadHandTexture() {
   if (!handTextureRequest) {
     handTextureRequest = new Promise((resolve, reject) => {
       new THREE.TextureLoader().load(
-        "/Pointing.png",
+        "/Pointing.webp",
         (next) => {
           next.colorSpace = THREE.SRGBColorSpace;
           handTexture = next;

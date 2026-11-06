@@ -1,13 +1,13 @@
 const ROOT = "/Kaszebe_assembly/Couplets";
 
 export const VERTICAL_TEMPLATE = {
-  src: "/Kaszebe_assembly/Kaszebe_empty.png",
+  src: "/Kaszebe_assembly/Kaszebe_empty.webp",
   width: 1600,
   height: 2800,
 };
 
 export const HORIZONTAL_TEMPLATE = {
-  src: "/Kaszebe_assembly/Kaszebe_horizontal_empty.png",
+  src: "/Kaszebe_assembly/Kaszebe_horizontal_empty.webp",
   width: 1600,
   height: 1200,
 };
@@ -32,23 +32,23 @@ function hit(id, x, y, width, height) {
 
 // Mobile / portrait: paired couplet cards, plus the final icon on its own tile.
 export const WIDE_CARDS = [
-  card("R1P1", "Krotcze-Stoleca.png", 700, 450, [
+  card("R1P1", "Krotcze-Stoleca.webp", 700, 450, [
     hit("R1P1.1", 64, 80, 80, 230),
     hit("R1P1.2", 200, 12, 90, 300),
     hit("R1P1.3", 340, 10, 345, 305),
   ], { left: 76, top: 16, right: 678, bottom: 304 }),
-  card("R1P2", "Base-Kaszeba.png", 700, 450, [
+  card("R1P2", "Base-Kaszeba.webp", 700, 450, [
     hit("R1P2.1", 8, 4, 220, 322),
     hit("R1P2.2", 210, 48, 165, 265),
     hit("R1P2.3", 390, 4, 255, 320),
   ], { left: 20, top: 6, right: 634, bottom: 304 }),
-  card("R2P1", "Ridel-Widłe.png", 700, 450, [
+  card("R2P1", "Ridel-Widłe.webp", 700, 450, [
     hit("R2P1.1", 48, 8, 114, 292),
     hit("R2P1.2", 188, 8, 82, 292),
     hit("R2P1.3", 298, 8, 268, 292),
     hit("R2P1.4", 586, 8, 82, 292),
   ], { left: 56, top: 6, right: 666, bottom: 304 }),
-  card("R2P2", "Proste-koło.png", 700, 450, [
+  card("R2P2", "Proste-koło.webp", 700, 450, [
     hit("R2P2.1", 58, 12, 85, 290),
     hit("R2P2.2", 175, 10, 155, 300),
     hit("R2P2.3", 348, 8, 310, 292),
@@ -56,28 +56,28 @@ export const WIDE_CARDS = [
 ];
 
 export const SQUARE_CARDS = [
-  card("R3P1", "Hoczi.png", 450, 450, [
+  card("R3P1", "Hoczi.webp", 450, 450, [
     hit("R3P1", 28, 14, 345, 305),
   ], { left: 44, top: 28, right: 346, bottom: 302 }),
-  card("R3P2", "Ptoczi.png", 450, 450, [
+  card("R3P2", "Ptoczi.webp", 450, 450, [
     hit("R3P2", 16, 40, 420, 295),
   ], { left: 28, top: 54, right: 424, bottom: 304 }),
-  card("R3P3", "Półtrojoczi.png", 450, 450, [
+  card("R3P3", "Półtrojoczi.webp", 450, 450, [
     hit("R3P3", 24, 2, 410, 300),
   ], { left: 42, top: 4, right: 440, bottom: 304 }),
-  card("R4P1", "Kleka.png", 450, 450, [
+  card("R4P1", "Kleka.webp", 450, 450, [
     hit("R4P1", 4, 18, 442, 316),
   ], { left: 10, top: 36, right: 438, bottom: 304 }),
-  card("R4P2", "Wół.png", 450, 450, [
+  card("R4P2", "Wół.webp", 450, 450, [
     hit("R4P2", 48, 12, 340, 322),
   ], { left: 68, top: 24, right: 366, bottom: 304 }),
-  card("R4P3", "Całe_pół.png", 450, 450, [
+  card("R4P3", "Całe_pół.webp", 450, 450, [
     hit("R4P3", 16, 12, 400, 280),
   ], { left: 16, top: 30, right: 416, bottom: 304 }),
 ];
 
 // Hit hugs the spheres only (not the wide caption). Ink matches that box for centering.
-export const FINAL_CARD = card("R4P4", "Final_icon.png", 700, 450, [
+export const FINAL_CARD = card("R4P4", "Final_icon.webp", 700, 450, [
   hit("R4P4", 140, 70, 350, 250),
 ], { left: 140, top: 70, right: 540, bottom: 320 });
 // Nudge the mobile final upward on the 5th staff (board px).
@@ -86,57 +86,57 @@ const VERTICAL_FINAL_LIFT = 90;
 // Browser / landscape: one file per picture, spaced along each staff.
 export const HORIZONTAL_ROWS = [
   [
-    card("R1P1a", "Krotcze.png", 350, 450, [
+    card("R1P1a", "Krotcze.webp", 350, 450, [
       hit("R1P1.1", 55, 70, 85, 240),
       hit("R1P1.2", 195, 10, 95, 300),
     ], { left: 55, top: 18, right: 290, bottom: 310 }),
-    card("R1P1b", "Stoleca.png", 350, 450, [
+    card("R1P1b", "Stoleca.webp", 350, 450, [
       hit("R1P1.3", 10, 12, 330, 300),
     ], { left: 12, top: 14, right: 340, bottom: 310 }),
-    card("R1P2a", "Base.png", 360, 450, [
+    card("R1P2a", "Base.webp", 360, 450, [
       hit("R1P2.1", 4, 8, 175, 310),
       hit("R1P2.2", 170, 40, 170, 270),
     ], { left: 4, top: 8, right: 340, bottom: 318 }),
-    card("R1P2b", "Kaszeba.png", 350, 450, [
+    card("R1P2b", "Kaszeba.webp", 350, 450, [
       hit("R1P2.3", 40, 8, 250, 310),
     ], { left: 40, top: 8, right: 290, bottom: 318 }),
   ],
   [
-    card("R2P1a", "Ridel.png", 350, 450, [
+    card("R2P1a", "Ridel.webp", 350, 450, [
       hit("R2P1.1", 48, 8, 120, 300),
       hit("R2P1.2", 185, 8, 120, 300),
     ], { left: 50, top: 8, right: 315, bottom: 310 }),
-    card("R2P1b", "Chojne.png", 400, 450, [
+    card("R2P1b", "Chojne.webp", 400, 450, [
       hit("R2P1.3", 8, 10, 250, 300),
       hit("R2P1.4", 275, 10, 115, 300),
     ], { left: 8, top: 16, right: 390, bottom: 310 }),
-    card("R2P2a", "Proste.png", 350, 450, [
+    card("R2P2a", "Proste.webp", 350, 450, [
       hit("R2P2.1", 50, 12, 80, 300),
       hit("R2P2.2", 165, 12, 160, 300),
     ], { left: 50, top: 20, right: 325, bottom: 318 }),
-    card("R2P2b", "Koło.png", 350, 450, [
+    card("R2P2b", "Koło.webp", 350, 450, [
       hit("R2P2.3", 12, 10, 290, 300),
     ], { left: 12, top: 14, right: 305, bottom: 318 }),
   ],
   [
-    card("R3P1", "Hoczi.png", 450, 450, [
+    card("R3P1", "Hoczi.webp", 450, 450, [
       hit("R3P1", 28, 14, 345, 305),
     ], { left: 44, top: 28, right: 346, bottom: 302 }),
-    card("R3P2", "Ptoczi.png", 450, 450, [
+    card("R3P2", "Ptoczi.webp", 450, 450, [
       hit("R3P2", 16, 40, 420, 295),
     ], { left: 28, top: 54, right: 424, bottom: 304 }),
-    card("R3P3", "Półtrojoczi.png", 450, 450, [
+    card("R3P3", "Półtrojoczi.webp", 450, 450, [
       hit("R3P3", 24, 2, 410, 300),
     ], { left: 42, top: 4, right: 440, bottom: 304 }),
   ],
   [
-    card("R4P1", "Kleka.png", 450, 450, [
+    card("R4P1", "Kleka.webp", 450, 450, [
       hit("R4P1", 4, 18, 442, 316),
     ], { left: 10, top: 36, right: 438, bottom: 304 }),
-    card("R4P2", "Wół.png", 450, 450, [
+    card("R4P2", "Wół.webp", 450, 450, [
       hit("R4P2", 48, 12, 340, 322),
     ], { left: 68, top: 24, right: 366, bottom: 304 }),
-    card("R4P3", "Całe_pół.png", 450, 450, [
+    card("R4P3", "Całe_pół.webp", 450, 450, [
       hit("R4P3", 16, 12, 400, 280),
     ], { left: 16, top: 30, right: 416, bottom: 304 }),
     FINAL_CARD,
@@ -164,7 +164,7 @@ export const HOLD_FLOWERS = new Set([
 
 const VERTICAL_CLEF = 216;
 const VERTICAL_RIGHT = 1510;
-// Staff midpoints on Kaszebe_empty.png (five staves; final sits alone on the last).
+// Staff midpoints on Kaszebe_empty.webp (five staves; final sits alone on the last).
 const VERTICAL_STAFF_Y = [537, 1022, 1539, 2033, 2552];
 
 const HORIZONTAL_CLEF = 210;
@@ -177,7 +177,7 @@ const HORIZONTAL_MAX_SCALE = 0.6;
 const HORIZONTAL_ROW4_SCALE = HORIZONTAL_MAX_SCALE * 0.9;
 // Row 3: ptôczi sits on the board center; side icons sit this many px from that center.
 const HORIZONTAL_ROW3_SIDE_OFFSET = 380;
-// Final icon alone on the mobile 5th staff (1 = native Final_icon.png size).
+// Final icon alone on the mobile 5th staff (1 = native Final_icon.webp size).
 const VERTICAL_FINAL_SCALE = 1.12;
 
 function mix(list) {

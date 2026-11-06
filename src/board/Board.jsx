@@ -89,7 +89,30 @@ export default function Board({
   );
   const [frames, setFrames] = useState([]);
   const [hold, setHold] = useState(null);
+  const [boardCursor, setBoardCursor] = useState(null);
+  const [finePointer, setFinePointer] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches,
+  );
   const holdActive = Boolean(showCues && hold);
+
+  useEffect(() => {
+    if (preview || typeof window === "undefined") return undefined;
+    const media = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const sync = () => {
+      setFinePointer(media.matches);
+      if (!media.matches) setBoardCursor(null);
+    };
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, [preview]);
+
+  const onBoardPointerMove = (event) => {
+    if (preview || !finePointer) return;
+    setBoardCursor({ x: event.clientX, y: event.clientY });
+  };
+
+  const onBoardPointerLeave = () => setBoardCursor(null);
 
   useEffect(() => {
     if (status !== "playing") return undefined;
@@ -140,14 +163,20 @@ export default function Board({
     ? hold.panels.map((id) => panels.find((panel) => panel.id === id)).filter(Boolean)
     : [];
 
+  const customCursor = Boolean(boardCursor) && !preview;
+
   return (
+    <>
     <div
-      className="board-frame"
+      className={["board-frame", customCursor ? "has-board-cursor" : ""].filter(Boolean).join(" ")}
       style={{
         "--board-w": board.width,
         "--board-h": board.height,
         transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
       }}
+      onPointerMove={onBoardPointerMove}
+      onPointerEnter={onBoardPointerMove}
+      onPointerLeave={onBoardPointerLeave}
     >
       <svg viewBox={board.viewBox} role="img" aria-label={song === "kaszebe" ? "Kaszëbsczé nótë board" : "Schnitzelbank board"}>
         <rect
@@ -314,6 +343,16 @@ export default function Board({
         </div>
       ) : null}
     </div>
+    {customCursor ? (
+      <img
+        className="board-pointer"
+        src="/Pointer.svg"
+        alt=""
+        aria-hidden="true"
+        style={{ left: boardCursor.x, top: boardCursor.y }}
+      />
+    ) : null}
+    </>
   );
 }
 

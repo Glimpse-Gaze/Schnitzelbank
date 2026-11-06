@@ -203,7 +203,7 @@ export function CanvasTools({
                 {onSwap ? (
                   <button type="button" className="mode-option swap-option" onClick={onSwap}>
                     <span>
-                      <img src="/Swap.png" alt="" />
+                      <img src="/Swap.webp" alt="" />
                       Swap
                     </span>
                     <small>{swapDetail}</small>
@@ -240,7 +240,7 @@ export function CanvasTools({
             aria-label={showCues ? "Timing guides on" : "Timing guides off"}
             onClick={onToggleCues}
           >
-            <img src="/time-left.png" alt="" />
+            <img src="/time-left.webp" alt="" />
           </button>
         </div>
       ) : null}

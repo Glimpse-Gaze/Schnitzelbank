@@ -6,8 +6,8 @@ const HOLD_ZONE = "#e0a63a";
 const BEAD = "2 7";
 const CORNER_STROKE = 8;
 
-const BAR_SRC = "/Kaszebe_assembly/Progress_bar.png";
-const FLOWER_SRC = "/Kaszebe_assembly/Floral_pattern.png";
+const BAR_SRC = "/Kaszebe_assembly/Progress_bar.webp";
+const FLOWER_SRC = "/Kaszebe_assembly/Floral_pattern.webp";
 const BAR_W = 420;
 const BAR_H = 100;
 
