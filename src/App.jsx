@@ -105,12 +105,17 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [boardOpen, setBoardOpen] = useState(false);
   const [boardRefresh, setBoardRefresh] = useState(0);
+  const [scrambling, setScrambling] = useState(false);
+  const userShuffledRef = useRef(false);
+  const scrambleGen = useRef(0);
   const endReasonRef = useRef(endReason);
   endReasonRef.current = endReason;
   const showCuesRef = useRef(showCues);
   showCuesRef.current = showCues;
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   useEffect(() => {
     getUserToken();
@@ -425,6 +430,8 @@ export default function App() {
       syncRunView(finished);
       runLive.current = false;
       runStarted.current = false;
+      // Next shuffled run must scramble again unless the player reshuffles first.
+      userShuffledRef.current = false;
       if (songRef.current) {
         updateLocalBest(songRef.current, finished.difficulty, {
           score: finished.score,
@@ -492,42 +499,6 @@ export default function App() {
     return () => stage.removeEventListener("wheel", onWheel);
   }, [setZoomClamped, song]);
 
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (results) {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          setResults(null);
-          return;
-        }
-        // Block transport Space; leave Enter alone so the nickname form can submit.
-        if (event.code === "Space") {
-          const tag = event.target?.tagName;
-          if (tag !== "INPUT" && tag !== "TEXTAREA") event.preventDefault();
-        }
-        return;
-      }
-      if (event.key === "Escape") {
-        if (!songRef.current) return;
-        event.preventDefault();
-        stop();
-        pan.current = { x: 0, y: 0 };
-        setPanOffset({ x: 0, y: 0 });
-        zoomRef.current = null;
-        setZoom(null);
-        setSong(null);
-        return;
-      }
-      if (event.code !== "Space" || !songRef.current) return;
-      event.preventDefault();
-      if (status === "playing") pause();
-      else play();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [status, play, pause, stop, results]);
-
   const onStagePointerDown = (event) => {
     if (event.button !== 1 && event.button !== 2) return;
     event.preventDefault();
@@ -573,25 +544,41 @@ export default function App() {
     setZoom(null);
   };
 
+  const cancelScramble = useCallback(() => {
+    scrambleGen.current += 1;
+    setScrambling(false);
+  }, []);
+
   const openSong = (next) => {
+    cancelScramble();
+    userShuffledRef.current = false;
     resetView();
     setSong(next);
     setResults(null);
     setBoardOpen(false);
   };
 
-  const onShuffle = () => {
-    if (!song || mode === "linear") return;
+  const reshuffleBoard = useCallback((songKey = songRef.current) => {
+    if (!songKey) return;
     setOrders((current) => {
-      if (song === "schnitzel") {
+      if (songKey === "schnitzel") {
         const list = current.schnitzel.couplets;
         const next = shuffleCouplets(list);
         const same = next.every((item, index) => item.src === list[index].src);
         const couplets = same ? [...next.slice(1), next[0]] : next;
-        return { ...current, schnitzel: { ...current.schnitzel, couplets } };
+        return { ...current, schnitzel: { ...current.schnitzel, mode: "shuffled", couplets } };
       }
-      return { ...current, kaszebe: { ...current.kaszebe, ...shuffleKaszebe(current.kaszebe) } };
+      return {
+        ...current,
+        kaszebe: { ...current.kaszebe, mode: "shuffled", ...shuffleKaszebe(current.kaszebe) },
+      };
     });
+  }, []);
+
+  const onShuffle = () => {
+    if (!song || mode === "linear" || status !== "stopped" || scrambling) return;
+    reshuffleBoard(song);
+    userShuffledRef.current = true;
   };
 
   const applyMode = (next) => {
@@ -615,6 +602,7 @@ export default function App() {
         },
       };
     });
+    userShuffledRef.current = next === "shuffled";
     stop();
   };
 
@@ -623,18 +611,102 @@ export default function App() {
   };
 
   const onDifficulty = (next) => {
+    if (scrambling) return;
     const settings = settingsFromDifficulty(next);
     setShowCues(settings.showCues);
-    applyMode(settings.mode);
+    if (settings.mode === "shuffled") {
+      // Every press on a shuffled mode (or switch between guide variants) reshuffles.
+      cancelScramble();
+      stop();
+      reshuffleBoard(song);
+      userShuffledRef.current = true;
+      return;
+    }
+    userShuffledRef.current = false;
+    if (mode !== "linear") applyMode("linear");
   };
 
+  const runForcedScramble = useCallback(async () => {
+    const songKey = songRef.current;
+    if (!songKey) return;
+    const gen = ++scrambleGen.current;
+    setScrambling(true);
+    for (let step = 0; step < 8; step += 1) {
+      if (scrambleGen.current !== gen) return;
+      reshuffleBoard(songKey);
+      await new Promise((resolve) => window.setTimeout(resolve, 220));
+    }
+    if (scrambleGen.current !== gen) return;
+    userShuffledRef.current = true;
+    setScrambling(false);
+    play();
+  }, [play, reshuffleBoard]);
+
+  const requestPlay = useCallback(() => {
+    if (scrambling) return;
+    if (status === "paused") {
+      play();
+      return;
+    }
+    if (status === "playing" || status === "counting") return;
+    if (modeRef.current === "shuffled" && !userShuffledRef.current) {
+      void runForcedScramble();
+      return;
+    }
+    play();
+  }, [scrambling, status, play, runForcedScramble]);
+
   const onSwap = () => {
-    if (!song) return;
+    if (!song || scrambling) return;
+    cancelScramble();
     stop();
     setProst(null);
     noteStep.current = 0;
     openSong(song === "schnitzel" ? "kaszebe" : "schnitzel");
   };
+
+  const onStop = () => {
+    cancelScramble();
+    stop();
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (results) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setResults(null);
+          return;
+        }
+        // Block transport Space; leave Enter alone so the nickname form can submit.
+        if (event.code === "Space") {
+          const tag = event.target?.tagName;
+          if (tag !== "INPUT" && tag !== "TEXTAREA") event.preventDefault();
+        }
+        return;
+      }
+      if (event.key === "Escape") {
+        if (!songRef.current) return;
+        event.preventDefault();
+        cancelScramble();
+        stop();
+        pan.current = { x: 0, y: 0 };
+        setPanOffset({ x: 0, y: 0 });
+        zoomRef.current = null;
+        setZoom(null);
+        setSong(null);
+        return;
+      }
+      if (event.code !== "Space" || !songRef.current) return;
+      event.preventDefault();
+      if (scrambling) return;
+      if (status === "playing") pause();
+      else requestPlay();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [status, play, pause, stop, results, requestPlay, scrambling, cancelScramble]);
 
   if (!song) {
     return (
@@ -724,6 +796,11 @@ export default function App() {
             holding={holding}
             showCues={showCues && !devTiming}
           />
+          {scrambling ? (
+            <div className="scramble-overlay" aria-live="assertive">
+              <span>Shuffling panels…</span>
+            </div>
+          ) : null}
           {countdown ? (
             <div className="countdown" aria-live="assertive">
               <span>{countdown}</span>
@@ -760,11 +837,11 @@ export default function App() {
             type="button"
             className="shuffle shuffle--dock"
             onClick={onShuffle}
-            disabled={mode === "linear"}
+            disabled={mode === "linear" || status !== "stopped" || scrambling}
           >
             Shuffle
           </button>
-          <Playback status={status} onPlay={play} onPause={pause} onStop={stop} />
+          <Playback status={status} onPlay={requestPlay} onPause={pause} onStop={onStop} />
         </div>
         <CanvasTools
           volume={volume}

@@ -186,8 +186,8 @@ export function CanvasTools({
               </svg>
             </button>
             {settingsOpen ? (
-              <div className="settings-menu" role="dialog" aria-label="Game mode">
-                <p className="settings-menu__title">Difficulty</p>
+              <div className="settings-menu" role="dialog" aria-label="Modes">
+                <p className="settings-menu__title">MODES</p>
                 {DIFFICULTY_OPTIONS.map((item) => (
                   <button
                     key={item.id}

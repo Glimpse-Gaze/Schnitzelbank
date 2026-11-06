@@ -6,10 +6,10 @@ export const DIFFICULTIES = {
 };
 
 export const DIFFICULTY_OPTIONS = [
-  { id: "easy", label: "Easy", detail: "Linear order with timing guides." },
-  { id: "medium", label: "Medium", detail: "Linear order, guides off." },
-  { id: "hard", label: "Hard", detail: "Shuffled pictures with guides." },
-  { id: "crazy", label: "Crazy", detail: "Shuffled pictures, guides off." },
+  { id: "easy", label: "Linear", detail: "In order, with timing guides." },
+  { id: "hard", label: "Shuffled", detail: "Mixed pictures, with timing guides." },
+  { id: "medium", label: "Linear (no guides)", detail: "In order, guides off." },
+  { id: "crazy", label: "Shuffled (no guides)", detail: "Mixed pictures, guides off." },
 ];
 
 export function difficultyFromSettings(mode, showCues) {

@@ -189,6 +189,19 @@ function mix(list) {
   return next;
 }
 
+// Shuffle, and rotate once if the order did not change.
+function remix(list) {
+  const next = mix(list);
+  if (next.length > 1 && next.every((item, index) => item.id === list[index].id)) {
+    next.push(next.shift());
+  }
+  return next;
+}
+
+function isFinalCard(item) {
+  return item?.id === FINAL_CARD.id;
+}
+
 export function linearKaszebe() {
   return {
     wide: [...WIDE_CARDS],
@@ -202,15 +215,29 @@ export function shuffleKaszebe(current) {
   const wideSource = current?.wide ?? WIDE_CARDS;
   const squareSource = current?.square ?? SQUARE_CARDS;
   const rowSource = current?.rows ?? HORIZONTAL_ROWS;
-  const wide = mix(wideSource);
-  const square = mix(squareSource);
-  if (wide.every((item, index) => item.id === wideSource[index].id)) wide.push(wide.shift());
-  if (square.every((item, index) => item.id === squareSource[index].id)) square.push(square.shift());
-  const rows = rowSource.map((row) => {
-    const next = mix(row);
-    if (next.every((item, index) => item.id === row[index].id)) next.push(next.shift());
-    return next;
-  });
+
+  // Mobile: 4 wide cards (rows 1–2) mix among themselves; 6 squares (rows 3–4)
+  // mix among themselves; final stays alone on the last staff.
+  const wide = remix(wideSource);
+  const square = remix(squareSource);
+
+  // Desktop: same pools — 8 early panels across rows 1–2, 6 late across 3–4.
+  const early = remix([...rowSource[0], ...rowSource[1]]);
+  const final =
+    rowSource[3]?.find(isFinalCard) ??
+    rowSource.flat().find(isFinalCard) ??
+    FINAL_CARD;
+  const late = remix([
+    ...rowSource[2],
+    ...rowSource[3].filter((item) => !isFinalCard(item)),
+  ]);
+  const rows = [
+    early.slice(0, 4),
+    early.slice(4, 8),
+    late.slice(0, 3),
+    [...late.slice(3, 6), final],
+  ];
+
   return {
     wide,
     square,
