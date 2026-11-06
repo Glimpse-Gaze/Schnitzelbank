@@ -45,9 +45,6 @@ export default function Lyrics({ status, time, error }) {
           )
         )}
       </div>
-      <div className="lyrics__meter" aria-hidden="true">
-        <span style={{ width: step ? `${Math.min(100, step.progress * 100)}%` : "0%" }} />
-      </div>
     </section>
   );
 }

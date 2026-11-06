@@ -3,19 +3,19 @@
 const ROOT = "/Schnitzelbank_assembly";
 
 export const BLANK = {
-  src: `${ROOT}/Schnitzelbank_blank.png`,
+  src: `${ROOT}/Schnitzelbank_blank.webp`,
   width: 1600,
   height: 2800,
 };
 
 export const MUSIC = {
-  src: `${ROOT}/Music/Schnitzelbank_music_only_staff.png`,
+  src: `${ROOT}/Music/Schnitzelbank_music_only_staff.webp`,
   width: 1600,
   height: 400,
 };
 
-const MUSIC_NOTES = `${ROOT}/Music/Schnitzelbank_music_only_notes.png`;
-const MUSIC_LYRICS = `${ROOT}/Music/Schnitzelbank_music_lyrics.png`;
+const MUSIC_NOTES = `${ROOT}/Music/Schnitzelbank_music_only_notes.webp`;
+const MUSIC_LYRICS = `${ROOT}/Music/Schnitzelbank_music_lyrics.webp`;
 
 // Each entry is one note in the notes PNG. The shapes do not touch,
 // so a single picture can still be clicked note by note.
@@ -38,7 +38,7 @@ const NOTE_SHAPES = [
 ];
 
 export const PANEL = {
-  src: `${ROOT}/Schnitzelbank_panel.png`,
+  src: `${ROOT}/Schnitzelbank_panel.webp`,
   width: 900,
   height: 400,
 };
@@ -58,56 +58,56 @@ export const GRID = { columns: 2 };
 
 export const COUPLETS = [
   {
-    src: `${ROOT}/Couplets/Schnitzel_Kurz-Hier.png`,
+    src: `${ROOT}/Couplets/Schnitzel_Kurz-Hier.webp`,
     panels: [
       { id: "R1P1", label: "Kurz und lang" },
       { id: "R1P2", label: "Hin und her" },
     ],
   },
   {
-    src: `${ROOT}/Couplets/Schnitzel_Kreuz_Schiess.png`,
+    src: `${ROOT}/Couplets/Schnitzel_Kreuz_Schiess.webp`,
     panels: [
       { id: "R1P3", label: "Kreuz und quer" },
       { id: "R1P4", label: "Schiess Gewehr" },
     ],
   },
   {
-    src: `${ROOT}/Couplets/Schnitzel_Wagen-Krum.png`,
+    src: `${ROOT}/Couplets/Schnitzel_Wagen-Krum.webp`,
     panels: [
       { id: "R2P1", label: "Wagen Rad" },
       { id: "R2P2", label: "Krumm und Grad" },
     ],
   },
   {
-    src: `${ROOT}/Couplets/Schnitzel_Grosses-Ochsen.png`,
+    src: `${ROOT}/Couplets/Schnitzel_Grosses-Ochsen.webp`,
     panels: [
       { id: "R2P3", label: "Grosses Glas" },
       { id: "R2P4", label: "Ochsen Blas" },
     ],
   },
   {
-    src: `${ROOT}/Couplets/Schnitzel_Haufen-Schnickel.png`,
+    src: `${ROOT}/Couplets/Schnitzel_Haufen-Schnickel.webp`,
     panels: [
       { id: "R3P1", label: "Haufen Mist" },
       { id: "R3P2", label: "Schnickel Fritz" },
     ],
   },
   {
-    src: `${ROOT}/Couplets/Schnitzel_Dicke-Fette.png`,
+    src: `${ROOT}/Couplets/Schnitzel_Dicke-Fette.webp`,
     panels: [
       { id: "R3P3", label: "Dicke Frau" },
       { id: "R3P4", label: "Fette Sau" },
     ],
   },
   {
-    src: `${ROOT}/Couplets/Schnitzel_Langer-Tannen.png`,
+    src: `${ROOT}/Couplets/Schnitzel_Langer-Tannen.webp`,
     panels: [
       { id: "R4P1", label: "Langer Mann" },
       { id: "R4P2", label: "Tannenbaum" },
     ],
   },
   {
-    src: `${ROOT}/Couplets/Schnitzel_Hochzeits-Gefahrliches.png`,
+    src: `${ROOT}/Couplets/Schnitzel_Hochzeits-Gefahrliches.webp`,
     panels: [
       { id: "R4P3", label: "Hochzeits Ring" },
       { id: "R4P4", label: "Gefährliches Ding" },

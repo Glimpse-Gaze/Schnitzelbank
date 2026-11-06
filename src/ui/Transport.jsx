@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { DIFFICULTY_OPTIONS } from "../score/difficulty.js";
 import { requestZoom } from "../scene/zoomBus.js";
 
 function Glyph({ children }) {
@@ -115,18 +116,13 @@ function ZoomControls() {
   );
 }
 
-const MODES = [
-  { id: "linear", label: "Linear", detail: "Pictures stay in song order." },
-  { id: "shuffled", label: "Shuffled", detail: "Pictures are mixed." },
-];
-
 export function CanvasTools({
   volume,
   onVolume,
   showCues,
   onToggleCues,
-  mode,
-  onMode,
+  difficulty,
+  onDifficulty,
   onOpenSettings,
   onSwap,
   swapDetail,
@@ -190,15 +186,15 @@ export function CanvasTools({
               </svg>
             </button>
             {settingsOpen ? (
-              <div className="settings-menu" role="dialog" aria-label="Game mode">
-                <p className="settings-menu__title">Game mode</p>
-                {MODES.map((item) => (
+              <div className="settings-menu" role="dialog" aria-label="Modes">
+                <p className="settings-menu__title">MODES</p>
+                {DIFFICULTY_OPTIONS.map((item) => (
                   <button
                     key={item.id}
                     type="button"
-                    className={mode === item.id ? "mode-option is-selected" : "mode-option"}
-                    aria-pressed={mode === item.id}
-                    onClick={() => onMode(item.id)}
+                    className={difficulty === item.id ? "mode-option is-selected" : "mode-option"}
+                    aria-pressed={difficulty === item.id}
+                    onClick={() => onDifficulty?.(item.id)}
                   >
                     <span>{item.label}</span>
                     <small>{item.detail}</small>
@@ -207,7 +203,7 @@ export function CanvasTools({
                 {onSwap ? (
                   <button type="button" className="mode-option swap-option" onClick={onSwap}>
                     <span>
-                      <img src="/Swap.png" alt="" />
+                      <img src="/Swap.webp" alt="" />
                       Swap
                     </span>
                     <small>{swapDetail}</small>
@@ -244,7 +240,7 @@ export function CanvasTools({
             aria-label={showCues ? "Timing guides on" : "Timing guides off"}
             onClick={onToggleCues}
           >
-            <img src="/time-left.png" alt="" />
+            <img src="/time-left.webp" alt="" />
           </button>
         </div>
       ) : null}

@@ -2,12 +2,12 @@
 
 const NAVY = "#1a4e8c";
 const SKY = "#9fd0ee";
-const YELLOW = "#F5C24E";
+const HOLD_ZONE = "#e0a63a";
 const BEAD = "2 7";
 const CORNER_STROKE = 8;
 
-const BAR_SRC = "/Kaszebe_assembly/Progress_bar.png";
-const FLOWER_SRC = "/Kaszebe_assembly/Floral_pattern.png";
+const BAR_SRC = "/Kaszebe_assembly/Progress_bar.webp";
+const FLOWER_SRC = "/Kaszebe_assembly/Floral_pattern.webp";
 const BAR_W = 420;
 const BAR_H = 100;
 
@@ -99,7 +99,43 @@ export function ApproachFrame({ chromeId, frameIndex, panel, scale, opacity, arr
   );
 }
 
-export function FolkHoldBar({ chromeId, bounds, progress }) {
+function ReleaseZones({ chromeId, slotX, slotY, slotW, slotH, okFrom, goodFrom, perfectFrom }) {
+  const ok = Math.min(1, Math.max(0, okFrom));
+  const good = Math.min(1, Math.max(ok, goodFrom));
+  const perfect = Math.min(1, Math.max(good, perfectFrom));
+  const okX = slotX + slotW * ok;
+  const goodX = slotX + slotW * good;
+  const perfectX = slotX + slotW * perfect;
+  const endX = slotX + slotW;
+  const okW = Math.max(0, goodX - okX);
+  const goodW = Math.max(0, perfectX - goodX);
+  const perfectW = Math.max(0, endX - perfectX);
+  const hatchOk = `${chromeId}-hatch-ok`;
+  return (
+    <g pointerEvents="none">
+      <defs>
+        {/* Ok — orange + white hatch (reads on cream). Good solid redder; Perfect solid red. */}
+        <pattern id={hatchOk} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="5" stroke="#fffef6" strokeWidth="2.4" />
+        </pattern>
+      </defs>
+      {okW > 0.5 ? (
+        <g>
+          <rect x={okX} y={slotY} width={okW} height={slotH} fill={HOLD_ZONE} opacity="0.92" />
+          <rect x={okX} y={slotY} width={okW} height={slotH} fill={`url(#${hatchOk})`} />
+        </g>
+      ) : null}
+      {goodW > 0.5 ? (
+        <rect x={goodX} y={slotY} width={goodW} height={slotH} fill="#cc7939" />
+      ) : null}
+      {perfectW > 0.5 ? (
+        <rect x={perfectX} y={slotY} width={perfectW} height={slotH} fill="#9b1212" />
+      ) : null}
+    </g>
+  );
+}
+
+export function FolkHoldBar({ chromeId, bounds, progress, okFrom = 0.7, goodFrom = 0.88, perfectFrom = 0.96 }) {
   if (!bounds || !Number.isFinite(bounds.width) || bounds.width < 36) return null;
   const barH = Math.min(168, Math.max(108, bounds.width * 0.36));
   const barW = barH * (BAR_W / BAR_H);
@@ -114,21 +150,24 @@ export function FolkHoldBar({ chromeId, bounds, progress }) {
   return (
     <g pointerEvents="none">
       <rect x={slotX} y={slotY} width={slotW} height={slotH} rx={slotH / 2} fill="#f4efe2" />
-      {amount > 0.004 ? (
-        <rect x={slotX} y={slotY} width={slotW * amount} height={slotH} rx={slotH / 2} fill={NAVY} />
-      ) : null}
       <clipPath id={clipId}>
         <rect x={x} y={y} width={barW} height={barH} />
       </clipPath>
       <image href={BAR_SRC} x={x} y={y} width={barW} height={barH} clipPath={`url(#${clipId})`} />
-      <circle
-        cx={slotX + slotW}
-        cy={slotY + slotH / 2}
-        r={Math.max(8, slotH * 0.78)}
-        fill={amount >= 0.97 ? YELLOW : "#f4efe2"}
-        stroke={NAVY}
-        strokeWidth={Math.max(2.5, slotH * 0.16)}
+      {/* Zones under the navy fill so progress still reads through Ok / Good / Perfect. */}
+      <ReleaseZones
+        chromeId={chromeId}
+        slotX={slotX}
+        slotY={slotY}
+        slotW={slotW}
+        slotH={slotH}
+        okFrom={okFrom}
+        goodFrom={goodFrom}
+        perfectFrom={perfectFrom}
       />
+      {amount > 0.004 ? (
+        <rect x={slotX} y={slotY} width={slotW * amount} height={slotH} fill={NAVY} opacity="0.92" />
+      ) : null}
     </g>
   );
 }

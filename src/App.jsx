@@ -3,9 +3,37 @@ import Board from "./board/Board.jsx";
 import { COUPLETS, NOTE_COUNT, shuffleCouplets } from "./board/couplets.js";
 import { linearKaszebe, shuffleKaszebe } from "./board/kaszebe.js";
 import Lyrics from "./ui/Lyrics.jsx";
+import LeaderboardPanel from "./ui/LeaderboardPanel.jsx";
+import ResultsModal from "./ui/ResultsModal.jsx";
 import { CanvasTools, Playback } from "./ui/Transport.jsx";
 import useSong, { playResponse, setAudienceLoud, songTime } from "./audio/useSong.js";
-import { gradeAt, holdForPanel, promptClose, promptForPanel, releaseClose, responseOnGrade, steps } from "./data/sequence.js";
+import {
+  gradeAt,
+  gradeRelease,
+  holdForPanel,
+  isRefrainAt,
+  promptClose,
+  promptForPanel,
+  releaseClose,
+  responseOnGrade,
+  steps,
+} from "./data/sequence.js";
+import {
+  difficultyFromSettings,
+  settingsFromDifficulty,
+} from "./score/difficulty.js";
+import {
+  PROST_MULTIPLIER,
+  accuracyOf,
+  applyGrade,
+  completeProst,
+  createRunState,
+  enterRefrain,
+  finalizeRun,
+  leaveRefrain,
+  newRunId,
+} from "./score/scoring.js";
+import { getUserToken, updateLocalBest } from "./score/storage.js";
 import { bindZoom } from "./scene/zoomBus.js";
 
 function audienceFade(step) {
@@ -27,7 +55,8 @@ export default function App() {
   const [song, setSong] = useState(null);
   const songRef = useRef(null);
   songRef.current = song;
-  const { status, time, countdown, error, volume, setVolume, play, pause, stop } = useSong(song);
+  const { status, time, countdown, error, volume, setVolume, play, pause, stop, endReason } =
+    useSong(song);
   const [hoveredPanel, setHoveredPanel] = useState(null);
   const [clickedPanel, setClickedPanel] = useState(null);
   const [grade, setGrade] = useState(null);
@@ -61,45 +90,107 @@ export default function App() {
   const armed = useRef(null);
   const [holding, setHolding] = useState(false);
   const mode = song ? orders[song].mode : "linear";
+  const difficulty = difficultyFromSettings(mode, showCues);
   const statusRef = useRef(status);
   statusRef.current = status;
 
-  const onClickPanel = useCallback((name, point) => {
-    setClickedPanel(name);
-    window.clearTimeout(clickTimer.current);
-    clickTimer.current = window.setTimeout(() => setClickedPanel(null), 420);
-    if (typeof name === "string" && name.startsWith("N")) {
-      const index = Number(name.slice(1)) - 1;
-      if (index === noteStep.current) {
-        noteStep.current += 1;
-        if (noteStep.current === NOTE_COUNT) {
-          noteStep.current = 0;
-          setProst({ id: Date.now(), point });
-        }
-      } else {
-        noteStep.current = 0;
-      }
-    }
-    if (statusRef.current !== "playing" || devTimingRef.current) return;
-    const now = songTime();
-    const prompt = promptForPanel(now, name);
-    if (!prompt || prompt.hold || judged.current.has(prompt.index)) return;
-    judged.current.add(prompt.index);
-    const value = gradeAt(now, prompt);
-    if (songRef.current === "kaszebe") {
-      if (!responseOnGrade(value)) {
-        misses.current.add(prompt.index);
-        audienceLoud.current = false;
-        setAudienceLoud(false, audienceFade(prompt));
-      } else if (!audienceLoud.current) {
-        audienceLoud.current = true;
-        setAudienceLoud(true, audienceFade(prompt));
-      }
-    } else if (responseOnGrade(value) && !prompt.dexterity) {
-      playResponse(prompt);
-    }
-    setGrade({ index: prompt.index, value, point: value === "late" ? null : point });
+  const runRef = useRef(null);
+  const runLive = useRef(false);
+  const runStarted = useRef(false);
+  const prevStatus = useRef(status);
+  const inRefrainRef = useRef(false);
+  const [liveScore, setLiveScore] = useState(0);
+  const [liveCombo, setLiveCombo] = useState(1);
+  const [liveBonus, setLiveBonus] = useState(1);
+  const [results, setResults] = useState(null);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [boardRefresh, setBoardRefresh] = useState(0);
+  const [scrambling, setScrambling] = useState(false);
+  const userShuffledRef = useRef(false);
+  const scrambleGen = useRef(0);
+  const endReasonRef = useRef(endReason);
+  endReasonRef.current = endReason;
+  const showCuesRef = useRef(showCues);
+  showCuesRef.current = showCues;
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+
+  useEffect(() => {
+    getUserToken();
   }, []);
+
+  const syncRunView = useCallback((next) => {
+    runRef.current = next;
+    setLiveScore(next?.score ?? 0);
+    setLiveCombo(next?.comboMult ?? 1);
+    setLiveBonus(next?.bonusActive ? PROST_MULTIPLIER : 1);
+  }, []);
+
+  const recordGrade = useCallback(
+    (value) => {
+      if (!runLive.current || !runRef.current || runRef.current.finalized) return;
+      if (statusRef.current !== "playing") return;
+      const next = applyGrade(runRef.current, value, PROST_MULTIPLIER);
+      syncRunView(next);
+    },
+    [syncRunView],
+  );
+
+  const onClickPanel = useCallback(
+    (name, point) => {
+      setClickedPanel(name);
+      window.clearTimeout(clickTimer.current);
+      clickTimer.current = window.setTimeout(() => setClickedPanel(null), 420);
+
+      if (typeof name === "string" && name.startsWith("N")) {
+        const playing = statusRef.current === "playing";
+        const stopped = statusRef.current === "stopped" || statusRef.current === "paused";
+        const allowPractice = stopped && !runLive.current;
+        const allowLive = playing && songRef.current === "schnitzel" && inRefrainRef.current;
+        if (allowPractice || allowLive) {
+          const index = Number(name.slice(1)) - 1;
+          if (index === noteStep.current) {
+            noteStep.current += 1;
+            if (noteStep.current === NOTE_COUNT) {
+              noteStep.current = 0;
+              setProst({ id: Date.now(), point });
+              if (allowLive && runRef.current) {
+                const { state } = completeProst(runRef.current, true);
+                syncRunView(state);
+              }
+            }
+          } else {
+            noteStep.current = 0;
+          }
+        }
+      }
+
+      if (statusRef.current !== "playing" || devTimingRef.current) return;
+      if (!runLive.current || runRef.current?.finalized) return;
+      const now = songTime();
+      const prompt = promptForPanel(now, name);
+      if (!prompt || prompt.hold || judged.current.has(prompt.index)) return;
+      judged.current.add(prompt.index);
+      const value = gradeAt(now, prompt);
+      if (songRef.current === "kaszebe") {
+        if (!responseOnGrade(value)) {
+          misses.current.add(prompt.index);
+          audienceLoud.current = false;
+          setAudienceLoud(false, audienceFade(prompt));
+        } else if (!audienceLoud.current) {
+          audienceLoud.current = true;
+          setAudienceLoud(true, audienceFade(prompt));
+        }
+      } else if (responseOnGrade(value) && !prompt.dexterity) {
+        playResponse(prompt);
+      }
+      recordGrade(value);
+      setGrade({ index: prompt.index, value, point: value === "late" ? null : point });
+    },
+    [recordGrade, syncRunView],
+  );
 
   const missAudience = (step) => {
     misses.current.add(step.index);
@@ -107,27 +198,33 @@ export default function App() {
     setAudienceLoud(false, audienceFade(step));
   };
 
-  const onHoldStart = useCallback((name, point) => {
-    if (devTimingRef.current) {
+  const onHoldStart = useCallback(
+    (name, point) => {
+      if (devTimingRef.current) {
+        if (statusRef.current !== "playing" || songRef.current !== "kaszebe") return;
+        pendingTiming.current = { panel: name, down: songTime() };
+        return;
+      }
       if (statusRef.current !== "playing" || songRef.current !== "kaszebe") return;
-      pendingTiming.current = { panel: name, down: songTime() };
-      return;
-    }
-    if (statusRef.current !== "playing" || songRef.current !== "kaszebe") return;
-    const now = songTime();
-    const step = holdForPanel(now, name);
-    if (!step || judged.current.has(step.index) || armed.current) return;
-    const value = gradeAt(now, step);
-    if (!responseOnGrade(value)) {
-      judged.current.add(step.index);
-      missAudience(step);
-      setGrade({ index: step.index, value, point: value === "late" ? null : point });
-      return;
-    }
-    armed.current = { index: step.index, press: value, point };
-    setHolding(true);
-    setGrade({ index: step.index, value, point, part: "press" });
-  }, []);
+      if (!runLive.current || runRef.current?.finalized) return;
+      const now = songTime();
+      const step = holdForPanel(now, name);
+      if (!step || judged.current.has(step.index) || armed.current) return;
+      const value = gradeAt(now, step);
+      if (!responseOnGrade(value)) {
+        judged.current.add(step.index);
+        missAudience(step);
+        recordGrade(value);
+        setGrade({ index: step.index, value, point: value === "late" ? null : point });
+        return;
+      }
+      armed.current = { index: step.index, press: value, point };
+      setHolding(true);
+      recordGrade(value);
+      setGrade({ index: step.index, value, point, part: "press" });
+    },
+    [recordGrade],
+  );
 
   const onHoldEnd = useCallback(() => {
     if (devTimingRef.current) {
@@ -157,14 +254,15 @@ export default function App() {
     const step = steps[current.index];
     if (!step || judged.current.has(step.index)) return;
     judged.current.add(step.index);
-    const released = gradeAt(songTime(), { perfect: step.releaseAt, lead: step.releaseLead });
+    const released = gradeRelease(songTime(), step);
+    recordGrade(released);
     setGrade({
       index: step.index,
       value: released,
       point: released === "late" ? null : current.point,
       part: "release",
     });
-  }, []);
+  }, [recordGrade]);
 
   useEffect(() => {
     if (devTimingRef.current) return undefined;
@@ -176,6 +274,7 @@ export default function App() {
           judged.current.add(cue.index);
           armed.current = null;
           setHolding(false);
+          recordGrade("late");
           setGrade((current) =>
             current && current.index > cue.index ? current : { index: cue.index, value: "late", part: "release" },
           );
@@ -185,13 +284,32 @@ export default function App() {
       if (time > promptClose(cue)) {
         judged.current.add(cue.index);
         if (songRef.current === "kaszebe") misses.current.add(cue.index);
+        recordGrade("late");
         setGrade((current) =>
           current && current.index > cue.index ? current : { index: cue.index, value: "late" },
         );
       }
     }
     return undefined;
-  }, [status, time]);
+  }, [status, time, recordGrade]);
+
+  useEffect(() => {
+    if (status !== "playing" || song !== "schnitzel") {
+      inRefrainRef.current = false;
+      return undefined;
+    }
+    const nowRefrain = isRefrainAt(time);
+    if (nowRefrain && !inRefrainRef.current) {
+      inRefrainRef.current = true;
+      noteStep.current = 0;
+      if (runRef.current) syncRunView(enterRefrain(runRef.current));
+    } else if (!nowRefrain && inRefrainRef.current) {
+      inRefrainRef.current = false;
+      noteStep.current = 0;
+      if (runRef.current) syncRunView(leaveRefrain(runRef.current));
+    }
+    return undefined;
+  }, [status, time, song, syncRunView]);
 
   useEffect(() => {
     if (status !== "playing") return undefined;
@@ -274,7 +392,71 @@ export default function App() {
   }, [prost]);
 
   useEffect(() => {
+    const previous = prevStatus.current;
+    prevStatus.current = status;
+
+    if (status === "counting") {
+      const songKey = songRef.current;
+      const modeNow = songKey ? ordersRef.current[songKey].mode : "linear";
+      const next = createRunState(
+        newRunId(),
+        difficultyFromSettings(modeNow, showCuesRef.current),
+      );
+      runLive.current = true;
+      runStarted.current = false;
+      inRefrainRef.current = false;
+      noteStep.current = 0;
+      syncRunView(next);
+      setResults(null);
+      return undefined;
+    }
+
+    if (status === "playing" && previous === "counting") {
+      runStarted.current = true;
+      return undefined;
+    }
+
     if (status === "playing" || status === "paused") return undefined;
+
+    if (
+      status === "stopped" &&
+      runLive.current &&
+      runStarted.current &&
+      runRef.current &&
+      !runRef.current.finalized
+    ) {
+      const finished = finalizeRun(runRef.current);
+      const accuracy = accuracyOf(finished);
+      syncRunView(finished);
+      runLive.current = false;
+      runStarted.current = false;
+      // Next shuffled run must scramble again unless the player reshuffles first.
+      userShuffledRef.current = false;
+      if (songRef.current) {
+        updateLocalBest(songRef.current, finished.difficulty, {
+          score: finished.score,
+          accuracy,
+        });
+        setResults({
+          runId: finished.runId,
+          difficulty: finished.difficulty,
+          score: finished.score,
+          accuracy,
+          peakCombo: finished.peakCombo,
+          prostCount: finished.prostCount,
+          bonusActive: finished.bonusActive,
+          reason: endReasonRef.current === "complete" ? "complete" : "stop",
+        });
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      }
+    } else if (status === "stopped") {
+      runLive.current = false;
+      runStarted.current = false;
+      syncRunView(null);
+    }
+
     judged.current.clear();
     recallPlayed.current.clear();
     misses.current.clear();
@@ -282,8 +464,9 @@ export default function App() {
     armed.current = null;
     setHolding(false);
     setGrade(null);
+    inRefrainRef.current = false;
     return undefined;
-  }, [status]);
+  }, [status, syncRunView]);
 
   useEffect(() => () => window.clearTimeout(clickTimer.current), []);
 
@@ -315,29 +498,6 @@ export default function App() {
     stage.addEventListener("wheel", onWheel, { passive: false });
     return () => stage.removeEventListener("wheel", onWheel);
   }, [setZoomClamped, song]);
-
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key === "Escape") {
-        if (!songRef.current) return;
-        event.preventDefault();
-        stop();
-        pan.current = { x: 0, y: 0 };
-        setPanOffset({ x: 0, y: 0 });
-        zoomRef.current = null;
-        setZoom(null);
-        setSong(null);
-        return;
-      }
-      if (event.code !== "Space" || !songRef.current) return;
-      event.preventDefault();
-      if (status === "playing") pause();
-      else play();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [status, play, pause, stop]);
 
   const onStagePointerDown = (event) => {
     if (event.button !== 1 && event.button !== 2) return;
@@ -384,26 +544,44 @@ export default function App() {
     setZoom(null);
   };
 
+  const cancelScramble = useCallback(() => {
+    scrambleGen.current += 1;
+    setScrambling(false);
+  }, []);
+
   const openSong = (next) => {
+    cancelScramble();
+    userShuffledRef.current = false;
     resetView();
     setSong(next);
+    setResults(null);
+    setBoardOpen(false);
   };
 
-  const onShuffle = () => {
-    if (!song || mode === "linear") return;
+  const reshuffleBoard = useCallback((songKey = songRef.current) => {
+    if (!songKey) return;
     setOrders((current) => {
-      if (song === "schnitzel") {
+      if (songKey === "schnitzel") {
         const list = current.schnitzel.couplets;
         const next = shuffleCouplets(list);
         const same = next.every((item, index) => item.src === list[index].src);
         const couplets = same ? [...next.slice(1), next[0]] : next;
-        return { ...current, schnitzel: { ...current.schnitzel, couplets } };
+        return { ...current, schnitzel: { ...current.schnitzel, mode: "shuffled", couplets } };
       }
-      return { ...current, kaszebe: { ...current.kaszebe, ...shuffleKaszebe(current.kaszebe) } };
+      return {
+        ...current,
+        kaszebe: { ...current.kaszebe, mode: "shuffled", ...shuffleKaszebe(current.kaszebe) },
+      };
     });
+  }, []);
+
+  const onShuffle = () => {
+    if (!song || mode === "linear" || status !== "stopped" || scrambling) return;
+    reshuffleBoard(song);
+    userShuffledRef.current = true;
   };
 
-  const onMode = (next) => {
+  const applyMode = (next) => {
     if (!song || next === mode) return;
     if (devTimingRef.current && song === "kaszebe" && next !== "linear") return;
     setOrders((current) => {
@@ -424,16 +602,111 @@ export default function App() {
         },
       };
     });
+    userShuffledRef.current = next === "shuffled";
     stop();
   };
 
+  const onToggleCues = () => {
+    setShowCues((current) => !current);
+  };
+
+  const onDifficulty = (next) => {
+    if (scrambling) return;
+    const settings = settingsFromDifficulty(next);
+    setShowCues(settings.showCues);
+    if (settings.mode === "shuffled") {
+      // Every press on a shuffled mode (or switch between guide variants) reshuffles.
+      cancelScramble();
+      stop();
+      reshuffleBoard(song);
+      userShuffledRef.current = true;
+      return;
+    }
+    userShuffledRef.current = false;
+    if (mode !== "linear") applyMode("linear");
+  };
+
+  const runForcedScramble = useCallback(async () => {
+    const songKey = songRef.current;
+    if (!songKey) return;
+    const gen = ++scrambleGen.current;
+    setScrambling(true);
+    for (let step = 0; step < 8; step += 1) {
+      if (scrambleGen.current !== gen) return;
+      reshuffleBoard(songKey);
+      await new Promise((resolve) => window.setTimeout(resolve, 220));
+    }
+    if (scrambleGen.current !== gen) return;
+    userShuffledRef.current = true;
+    setScrambling(false);
+    play();
+  }, [play, reshuffleBoard]);
+
+  const requestPlay = useCallback(() => {
+    if (scrambling) return;
+    if (status === "paused") {
+      play();
+      return;
+    }
+    if (status === "playing" || status === "counting") return;
+    if (modeRef.current === "shuffled" && !userShuffledRef.current) {
+      void runForcedScramble();
+      return;
+    }
+    play();
+  }, [scrambling, status, play, runForcedScramble]);
+
   const onSwap = () => {
-    if (!song) return;
+    if (!song || scrambling) return;
+    cancelScramble();
     stop();
     setProst(null);
     noteStep.current = 0;
     openSong(song === "schnitzel" ? "kaszebe" : "schnitzel");
   };
+
+  const onStop = () => {
+    cancelScramble();
+    stop();
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (results) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setResults(null);
+          return;
+        }
+        // Block transport Space; leave Enter alone so the nickname form can submit.
+        if (event.code === "Space") {
+          const tag = event.target?.tagName;
+          if (tag !== "INPUT" && tag !== "TEXTAREA") event.preventDefault();
+        }
+        return;
+      }
+      if (event.key === "Escape") {
+        if (!songRef.current) return;
+        event.preventDefault();
+        cancelScramble();
+        stop();
+        pan.current = { x: 0, y: 0 };
+        setPanOffset({ x: 0, y: 0 });
+        zoomRef.current = null;
+        setZoom(null);
+        setSong(null);
+        return;
+      }
+      if (event.code !== "Space" || !songRef.current) return;
+      event.preventDefault();
+      if (scrambling) return;
+      if (status === "playing") pause();
+      else requestPlay();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [status, play, pause, stop, results, requestPlay, scrambling, cancelScramble]);
 
   if (!song) {
     return (
@@ -489,44 +762,73 @@ export default function App() {
   }
 
   return (
-    <div id="app">
-      <div
-        ref={stageRef}
-        className={panning ? "stage is-panning" : "stage"}
-        onPointerDown={onStagePointerDown}
-        onPointerMove={onStagePointerMove}
-        onPointerUp={onStagePointerUp}
-        onPointerCancel={onStagePointerUp}
-        onMouseDown={(event) => {
-          if (event.button === 1) event.preventDefault();
-        }}
-        onAuxClick={(event) => event.preventDefault()}
-        onContextMenu={(event) => event.preventDefault()}
-      >
-        <Board
+    <div id="app" className={boardOpen ? "has-leaderboard" : undefined}>
+      <div className="play-shell">
+        <div
+          ref={stageRef}
+          className={panning ? "stage is-panning" : "stage"}
+          onPointerDown={onStagePointerDown}
+          onPointerMove={onStagePointerMove}
+          onPointerUp={onStagePointerUp}
+          onPointerCancel={onStagePointerUp}
+          onMouseDown={(event) => {
+            if (event.button === 1) event.preventDefault();
+          }}
+          onAuxClick={(event) => event.preventDefault()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <Board
+            song={song}
+            couplets={orders.schnitzel.couplets}
+            cards={orders.kaszebe}
+            status={status}
+            hoveredPanel={hoveredPanel}
+            clickedPanel={clickedPanel}
+            grade={grade}
+            prost={prost}
+            pan={panOffset}
+            zoom={zoom}
+            onFitZoom={onFitZoom}
+            onHoverPanel={setHoveredPanel}
+            onClickPanel={onClickPanel}
+            onHoldStart={onHoldStart}
+            onHoldEnd={onHoldEnd}
+            holding={holding}
+            showCues={showCues && !devTiming}
+          />
+          {scrambling ? (
+            <div className="scramble-overlay" aria-live="assertive">
+              <span>Shuffling panels…</span>
+            </div>
+          ) : null}
+          {countdown ? (
+            <div className="countdown" aria-live="assertive">
+              <span>{countdown}</span>
+            </div>
+          ) : null}
+          {(status === "playing" || status === "paused" || status === "counting") && (
+            <div className="live-hud" aria-live="polite">
+              <div className="live-score">{liveScore}</div>
+              {liveCombo > 1 ? (
+                <div className="live-combo" title="Combo from consecutive Ok+ hits">
+                  COMBO ×{liveCombo.toFixed(2)}
+                </div>
+              ) : null}
+              {liveBonus > 1 ? (
+                <div className="live-bonus" title="Prost bonus — don't miss a note">
+                  PROST ×{liveBonus.toFixed(2)}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+        <LeaderboardPanel
           song={song}
-          couplets={orders.schnitzel.couplets}
-          cards={orders.kaszebe}
-          status={status}
-          hoveredPanel={hoveredPanel}
-          clickedPanel={clickedPanel}
-          grade={grade}
-          prost={prost}
-          pan={panOffset}
-          zoom={zoom}
-          onFitZoom={onFitZoom}
-          onHoverPanel={setHoveredPanel}
-          onClickPanel={onClickPanel}
-          onHoldStart={onHoldStart}
-          onHoldEnd={onHoldEnd}
-          holding={holding}
-          showCues={showCues && !devTiming}
+          difficulty={difficulty}
+          open={boardOpen}
+          onToggle={() => setBoardOpen((current) => !current)}
+          refreshKey={boardRefresh}
         />
-        {countdown ? (
-          <div className="countdown" aria-live="assertive">
-            <span>{countdown}</span>
-          </div>
-        ) : null}
       </div>
       <section className="player" aria-label="Player">
         <Lyrics status={status} time={time} error={error} />
@@ -535,26 +837,26 @@ export default function App() {
             type="button"
             className="shuffle shuffle--dock"
             onClick={onShuffle}
-            disabled={mode === "linear"}
+            disabled={mode === "linear" || status !== "stopped" || scrambling}
           >
             Shuffle
           </button>
-          <Playback status={status} onPlay={play} onPause={pause} onStop={stop} />
+          <Playback status={status} onPlay={requestPlay} onPause={pause} onStop={onStop} />
         </div>
         <CanvasTools
           volume={volume}
           onVolume={setVolume}
           showCues={showCues}
-          onToggleCues={() => setShowCues((current) => !current)}
-          mode={mode}
-          onMode={onMode}
+          onToggleCues={onToggleCues}
+          difficulty={difficulty}
+          onDifficulty={onDifficulty}
           onSwap={onSwap}
           swapDetail={song === "schnitzel" ? "Open Kaszëbsczé nótë." : "Open Schnitzelbank."}
           devTiming={devTiming}
           timingTakes={timingTakes}
           onDevTiming={(on) => {
             setDevTiming(on);
-            if (on && song === "kaszebe" && mode !== "linear") onMode("linear");
+            if (on && song === "kaszebe" && mode !== "linear") applyMode("linear");
             if (on) {
               console.info(
                 "[timing] Developer timing is on. Guides are hidden. Play linear, click what you hear, then download the log from this menu.",
@@ -584,6 +886,14 @@ export default function App() {
           }}
         />
       </section>
+      <ResultsModal
+        open={Boolean(results)}
+        result={results}
+        song={song}
+        difficulty={results?.difficulty || difficulty}
+        onClose={() => setResults(null)}
+        onSubmitted={() => setBoardRefresh((value) => value + 1)}
+      />
     </div>
   );
 }
